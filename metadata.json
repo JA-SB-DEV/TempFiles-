@@ -1,0 +1,7 @@
+{
+  "name": "Chronos - Archivos Efímeros",
+  "description": "Sube imágenes, videos y audios temporales que se autodestruyen. Genera códigos de acceso únicos para compartir de forma segura.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
