@@ -295,7 +295,7 @@ export default function App() {
         {/* Footer */}
         <footer className="p-6 text-center text-slate-600 text-xs font-mono">
             <p className="flex items-center justify-center gap-2">
-                <Zap size={12} /> Powered by Gemini & Supabase
+                <Zap size={12} /> Powered by Supabase
             </p>
         </footer>
 
