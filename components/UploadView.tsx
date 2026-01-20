@@ -1,55 +1,70 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { TempFile } from '../types';
-import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
+import { supabase, isSupabaseConfigured, checkCodeExists } from '../services/supabaseClient';
 import { encryptFile } from '../utils/crypto';
-import { Camera, Video, Upload, Loader2, Database, Clock, Flame, Shield, X, FileText, Image as ImageIcon, Mic, StopCircle, Play, Trash2, Lock, Unlock, AlertTriangle, Eye, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Camera, Video, Upload, Loader2, Database, Clock, Flame, Shield, X, FileText, Image as ImageIcon, Mic, StopCircle, Play, Trash2, Lock, ArrowRight, ShieldCheck, Eye, HardDrive, File as FileIcon, Paperclip } from 'lucide-react';
 
 interface UploadViewProps {
   onUploadSuccess: (file: TempFile) => void;
 }
 
-type UploadMode = 'file' | 'text' | 'audio';
+type UploadMode = 'file' | 'text' | 'audio' | 'document';
 
 // Theme Helpers
 const getTheme = (mode: UploadMode, fileType?: string) => {
     if (mode === 'text') {
         return {
-            color: 'text-amber-400',
-            border: 'border-amber-500',
+            color: 'text-amber-600 dark:text-amber-400',
+            border: 'border-amber-500/50',
+            focusRing: 'focus:ring-amber-500',
             bg: 'bg-amber-600',
             gradient: 'from-amber-500 to-orange-600',
-            shadow: 'shadow-amber-500/20',
-            accent: 'text-orange-400'
+            shadow: 'shadow-[0_0_30px_rgba(245,158,11,0.2)]',
+            accent: 'text-orange-500 dark:text-orange-400'
         };
     }
     if (mode === 'audio' || fileType?.startsWith('audio/')) {
         return {
-            color: 'text-pink-400',
-            border: 'border-pink-500',
+            color: 'text-pink-600 dark:text-pink-400',
+            border: 'border-pink-500/50',
+            focusRing: 'focus:ring-pink-500',
             bg: 'bg-pink-600',
             gradient: 'from-pink-500 to-rose-600',
-            shadow: 'shadow-pink-500/20',
-            accent: 'text-rose-400'
+            shadow: 'shadow-[0_0_30px_rgba(236,72,153,0.2)]',
+            accent: 'text-rose-500 dark:text-rose-400'
         };
     }
     if (fileType?.startsWith('video/')) {
         return {
-            color: 'text-violet-400',
-            border: 'border-violet-500',
+            color: 'text-violet-600 dark:text-violet-400',
+            border: 'border-violet-500/50',
+            focusRing: 'focus:ring-violet-500',
             bg: 'bg-violet-600',
             gradient: 'from-violet-600 to-fuchsia-600',
-            shadow: 'shadow-violet-500/20',
-            accent: 'text-fuchsia-400'
+            shadow: 'shadow-[0_0_30px_rgba(139,92,246,0.2)]',
+            accent: 'text-fuchsia-500 dark:text-fuchsia-400'
+        };
+    }
+    if (mode === 'document') {
+         return {
+            color: 'text-emerald-600 dark:text-emerald-400',
+            border: 'border-emerald-500/50',
+            focusRing: 'focus:ring-emerald-500',
+            bg: 'bg-emerald-600',
+            gradient: 'from-emerald-500 to-teal-600',
+            shadow: 'shadow-[0_0_30px_rgba(16,185,129,0.2)]',
+            accent: 'text-teal-500 dark:text-teal-400'
         };
     }
     // Default / Image
     return {
-        color: 'text-cyan-400',
-        border: 'border-cyan-500',
+        color: 'text-cyan-600 dark:text-cyan-400',
+        border: 'border-cyan-500/50',
+        focusRing: 'focus:ring-cyan-500',
         bg: 'bg-cyan-600',
-        gradient: 'from-cyan-600 to-blue-600',
-        shadow: 'shadow-cyan-500/20',
-        accent: 'text-cyan-400'
+        gradient: 'from-cyan-500 to-blue-600',
+        shadow: 'shadow-[0_0_30px_rgba(6,182,212,0.2)]',
+        accent: 'text-cyan-600 dark:text-cyan-400'
     };
 };
 
@@ -60,8 +75,13 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState<string>('');
   const [dragActive, setDragActive] = useState(false);
   
+  // Code State
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -90,7 +110,12 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
       return;
     }
     setSelectedFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+    if (mode === 'document') {
+        // No preview URL needed for generic docs unless it's an image disguised
+        setPreviewUrl(null); 
+    } else {
+        setPreviewUrl(URL.createObjectURL(file));
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -177,121 +202,157 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
     return result; 
   };
 
-  const handleInitialSubmit = () => {
+  const handleInitialSubmit = async () => {
     if (mode === 'file' && (!selectedFile || !previewUrl)) return;
     if (mode === 'text' && !textContent.trim()) return;
     if (mode === 'audio' && !selectedFile) return;
+    if (mode === 'document' && !selectedFile) return;
 
     if (!isSupabaseConfigured()) {
       alert("Error: Supabase no está configurado.");
       return;
     }
-    
-    // Open Confirmation Modal
-    setShowConfirmModal(true);
+
+    setIsGeneratingCode(true);
+
+    try {
+        let unique = false;
+        let code = '';
+        let attempts = 0;
+
+        while (!unique && attempts < 10) {
+            code = generateRandomCode();
+            const exists = await checkCodeExists(code);
+            if (!exists) unique = true;
+            attempts++;
+        }
+
+        if (!unique) {
+            alert("Error generando un código único. Por favor, inténtalo de nuevo.");
+            setIsGeneratingCode(false);
+            return;
+        }
+
+        setGeneratedCode(code);
+        setIsGeneratingCode(false);
+        setShowConfirmModal(true);
+    } catch (e) {
+        console.error("Error checking code uniqueness", e);
+        setGeneratedCode(generateRandomCode());
+        setIsGeneratingCode(false);
+        setShowConfirmModal(true);
+    }
   };
 
   const executeUpload = async () => {
     setShowConfirmModal(false);
     setIsProcessing(true);
-    setProgress(10); 
-
-    let code: string = generateRandomCode(); 
-    let fileToEncrypt: File;
+    setProgress(0); 
+    setStatusMessage('Iniciando...');
 
     try {
-      if (mode === 'text') {
-        const blob = new Blob([textContent], { type: 'text/plain' });
-        fileToEncrypt = new File([blob], 'secret_note.txt', { type: 'text/plain' });
-      } else {
-        fileToEncrypt = selectedFile!;
-      }
-      
-      setProgress(30);
-
-      // SECURITY KEY LOGIC:
-      // If password exists, the Encryption Key = CODE + PASSWORD
-      // If no password, Encryption Key = CODE
-      const encryptionKey = password ? (code + password) : code;
-
-      const encryptedBlob = await encryptFile(
-        fileToEncrypt, 
-        encryptionKey, 
-        {
-          burnOnRead,
-          durationMinutes: duration,
-          burnDelaySeconds: burnOnRead ? burnDelay : undefined
+        let fileToEncrypt: File;
+        if (mode === 'text') {
+            const blob = new Blob([textContent], { type: 'text/plain' });
+            fileToEncrypt = new File([blob], 'secret_note.txt', { type: 'text/plain' });
+        } else {
+            fileToEncrypt = selectedFile!;
         }
-      );
-
-      setProgress(50);
-
-      const fileExt = 'enc';
-      const fileName = `${code}-${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
-
-      const interval = setInterval(() => {
-        setProgress(prev => Math.min(prev + 5, 90));
-      }, 100);
-
-      const { error: uploadError } = await supabase.storage
-        .from('chronos_files')
-        .upload(filePath, encryptedBlob, {
-          contentType: 'application/octet-stream'
-        });
-
-      clearInterval(interval);
-      if (uploadError) {
-        // Helpful error for missing bucket
-        if (uploadError.message.includes("resource") || uploadError.message.includes("bucket")) {
-            throw new Error("El 'Bucket' de almacenamiento no existe. Ve a Supabase -> Storage y crea un bucket público llamado 'chronos_files'.");
-        }
-        throw uploadError;
-      }
-
-      setProgress(95);
-
-      const expiresInMs = duration * 60 * 1000;
-      const now = Date.now();
-      const expiresAt = now + expiresInMs;
+    
+        setProgress(10);
+        setStatusMessage('Generando llaves...');
+        const code = generatedCode || generateRandomCode();
       
-      let type: TempFile['type'] = 'image';
-      if (mode === 'text') type = 'text';
-      else if (mode === 'audio' || fileToEncrypt.type.startsWith('audio/')) type = 'audio';
-      else if (fileToEncrypt.type.startsWith('video/')) type = 'video';
+        const encryptionKey = password ? (code + password) : code;
 
-      const newFile: TempFile = {
-        id: crypto.randomUUID(),
-        code: code,
-        fileUrl: filePath,
-        type: type,
-        createdAt: now,
-        expiresAt: expiresAt,
-        mimeType: fileToEncrypt.type,
-      };
+        setProgress(20);
+        setStatusMessage('Encriptando (AES-GCM)...');
 
-      const { error: dbError } = await supabase
-        .from('temp_files')
-        .insert([
-          {
-            code: newFile.code,
-            file_path: newFile.fileUrl,
-            type: newFile.type,
-            mime_type: 'application/encrypted', // Hide real type
-            expires_at: new Date(expiresAt).toISOString()
-          }
-        ]);
+        const encryptedBlob = await encryptFile(
+            fileToEncrypt, 
+            encryptionKey, 
+            {
+            burnOnRead,
+            durationMinutes: duration,
+            burnDelaySeconds: burnOnRead ? burnDelay : undefined
+            }
+        );
 
-      if (dbError) throw dbError;
+        setProgress(40);
+        setStatusMessage('Subiendo a la nube...');
 
-      setProgress(100);
-      onUploadSuccess(newFile);
+        const fileExt = 'enc';
+        const fileName = `${code}-${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const interval = setInterval(() => {
+            setProgress(prev => {
+                if (prev >= 85) return prev;
+                return prev + 5;
+            });
+        }, 300);
+
+        const { error: uploadError } = await supabase.storage
+            .from('chronos_files')
+            .upload(filePath, encryptedBlob, {
+            contentType: 'application/octet-stream'
+            });
+
+        clearInterval(interval);
+        if (uploadError) {
+            if (uploadError.message.includes("resource") || uploadError.message.includes("bucket")) {
+                throw new Error("Bucket 'chronos_files' no encontrado en Supabase.");
+            }
+            throw uploadError;
+        }
+
+        setProgress(90);
+        setStatusMessage('Finalizando registro...');
+
+        const expiresInMs = duration * 60 * 1000;
+        const now = Date.now();
+        const expiresAt = now + expiresInMs;
+        
+        let type: TempFile['type'] = 'image';
+        if (mode === 'text') type = 'text';
+        else if (mode === 'audio' || fileToEncrypt.type.startsWith('audio/')) type = 'audio';
+        else if (fileToEncrypt.type.startsWith('video/')) type = 'video';
+        else if (mode === 'document') type = 'document';
+
+        const newFile: TempFile = {
+            id: crypto.randomUUID(),
+            code: code,
+            fileUrl: filePath,
+            type: type,
+            createdAt: now,
+            expiresAt: expiresAt,
+            mimeType: fileToEncrypt.type,
+        };
+
+        const { error: dbError } = await supabase
+            .from('temp_files')
+            .insert([
+            {
+                code: newFile.code,
+                file_path: newFile.fileUrl,
+                type: newFile.type,
+                mime_type: 'application/encrypted',
+                expires_at: new Date(expiresAt).toISOString()
+            }
+            ]);
+
+        if (dbError) throw dbError;
+
+        setProgress(100);
+        setStatusMessage('¡Completado!');
+        onUploadSuccess(newFile);
 
     } catch (error: any) {
       console.error("Upload failed", error);
       alert(`Error: ${error.message || "Error desconocido"}`);
       setIsProcessing(false);
       setProgress(0);
+      setStatusMessage('');
     }
   };
 
@@ -299,11 +360,35 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
     setSelectedFile(null);
     setPreviewUrl(null);
     setProgress(0);
+    setStatusMessage('');
     setIsRecording(false);
+    setGeneratedCode(null);
     if (mediaRecorderRef.current) {
         // cleanup
     }
   };
+
+  // Reusable Progress Overlay Component
+  const ProgressOverlay = () => (
+      <div className="absolute inset-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center z-20 rounded-2xl animate-fade-in border border-slate-200 dark:border-white/5">
+          <div className="w-64 h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-4 relative shadow-inner">
+              <div 
+                className={`h-full bg-gradient-to-r ${theme.gradient} transition-all duration-300 relative`}
+                style={{ width: `${progress}%` }}
+              >
+                  <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px] animate-pulse"></div>
+              </div>
+          </div>
+          <div className="flex flex-col items-center">
+              <p className={`${theme.color} font-bold font-mono text-lg animate-pulse mb-1`}>
+                  {statusMessage}
+              </p>
+              <p className="text-slate-500 dark:text-slate-400 text-xs font-mono tracking-widest">
+                  [{progress}%]
+              </p>
+          </div>
+      </div>
+  );
 
   return (
     <div className="w-full max-w-md mx-auto animate-fade-in relative z-10">
@@ -311,62 +396,52 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
       {/* --- CONFIRMATION MODAL --- */}
       {showConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowConfirmModal(false)}></div>
-            <div className="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-2xl p-6 relative z-10 shadow-2xl animate-fade-in">
-                <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                    <ShieldCheck className="text-emerald-400" /> Confirmar Subida
+            <div className="absolute inset-0 bg-white/60 dark:bg-slate-950/80 backdrop-blur-sm" onClick={() => setShowConfirmModal(false)}></div>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600/50 w-full max-w-sm rounded-3xl p-6 relative z-10 shadow-2xl animate-fade-in overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div>
+                
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-3">
+                    <ShieldCheck className="text-emerald-500 dark:text-emerald-400" size={28} /> 
+                    <span className="tracking-tight">Confirmar Encriptación</span>
                 </h3>
                 
-                <div className="space-y-4 mb-6">
-                    <div className="bg-slate-800 p-3 rounded-xl flex items-center justify-between">
-                        <span className="text-slate-400 text-sm">Tipo</span>
-                        <span className={`font-semibold ${theme.color} uppercase text-sm`}>
-                            {mode === 'text' ? 'Texto Seguro' : selectedFile?.type.split('/')[0] || 'Archivo'}
+                <div className="space-y-4 mb-8">
+                    <div className="bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-700 p-4 rounded-xl flex items-center justify-between group">
+                        <span className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">Código</span>
+                        <span className="font-bold text-cyan-600 dark:text-cyan-400 text-2xl font-mono tracking-widest group-hover:text-cyan-500 dark:group-hover:text-cyan-300 transition-colors">
+                            {generatedCode}
                         </span>
                     </div>
 
-                    <div className="bg-slate-800 p-3 rounded-xl flex items-center justify-between">
-                        <span className="text-slate-400 text-sm">Expiración</span>
-                        <span className="font-semibold text-white text-sm flex items-center gap-1">
-                            <Clock size={14} /> 
-                            {duration === 1440 ? '24 Horas' : duration === 60 ? '1 Hora' : `${duration} Min`}
-                        </span>
-                    </div>
-
-                    <div className={`p-3 rounded-xl flex items-center justify-between border ${burnOnRead ? 'bg-orange-900/20 border-orange-500/50' : 'bg-slate-800 border-transparent'}`}>
-                        <span className="text-slate-400 text-sm">Auto-Destrucción</span>
-                        <div className="text-right">
-                             <span className={`font-semibold text-sm block ${burnOnRead ? 'text-orange-400' : 'text-slate-500'}`}>
-                                {burnOnRead ? 'ACTIVADO' : 'Desactivado'}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-white/5">
+                            <span className="text-slate-500 text-[10px] font-bold uppercase block mb-1">Duración</span>
+                            <span className="text-slate-700 dark:text-white text-sm font-semibold flex items-center gap-1">
+                                <Clock size={14} className="text-cyan-500 dark:text-cyan-400" /> 
+                                {duration === 1440 ? '24h' : duration === 60 ? '1h' : `${duration}m`}
                             </span>
-                            {burnOnRead && (
-                                <span className="text-xs text-orange-300">
-                                    Se borra tras {burnDelay}s de lectura
-                                </span>
-                            )}
                         </div>
-                    </div>
-
-                     <div className={`p-3 rounded-xl flex items-center justify-between border ${password ? 'bg-emerald-900/20 border-emerald-500/50' : 'bg-slate-800 border-transparent'}`}>
-                        <span className="text-slate-400 text-sm">Contraseña</span>
-                        <span className={`font-semibold text-sm ${password ? 'text-emerald-400' : 'text-slate-500'}`}>
-                            {password ? 'Sí (Capa Extra)' : 'No (Solo Código)'}
-                        </span>
+                        <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-white/5">
+                             <span className="text-slate-500 text-[10px] font-bold uppercase block mb-1">Auto-Destrucción</span>
+                             <span className={`text-sm font-semibold flex items-center gap-1 ${burnOnRead ? 'text-orange-500 dark:text-orange-400' : 'text-slate-400'}`}>
+                                <Flame size={14} /> {burnOnRead ? 'Si' : 'No'}
+                            </span>
+                        </div>
                     </div>
                 </div>
 
                 <div className="flex gap-3">
                     <button 
                         onClick={() => setShowConfirmModal(false)}
-                        className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-sm transition-colors"
+                        className="flex-1 py-3.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm transition-colors"
                     >
                         Cancelar
                     </button>
                     <button 
                         onClick={executeUpload}
-                        className={`flex-1 py-3 rounded-xl font-bold text-white text-sm shadow-lg flex items-center justify-center gap-2 bg-gradient-to-r ${theme.gradient}`}
+                        className={`flex-[2] py-3.5 rounded-xl font-bold text-white dark:text-slate-900 text-sm shadow-lg flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:brightness-110 transition-all`}
                     >
-                        Subir <ArrowRight size={16} />
+                        Encriptar y Subir <ArrowRight size={16} />
                     </button>
                 </div>
             </div>
@@ -374,302 +449,342 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
       )}
 
       {!isSupabaseConfigured() && (
-        <div className="mb-4 bg-red-500/20 border border-red-500 rounded-xl p-4 text-red-200 text-sm flex items-start gap-3">
-          <Database className="shrink-0" />
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 backdrop-blur-md rounded-xl p-4 text-red-600 dark:text-red-200 text-sm flex items-start gap-3">
+          <Database className="shrink-0 animate-pulse" />
           <div>
-            <p className="font-bold">Supabase no conectado</p>
+            <p className="font-bold">Error de Conexión</p>
+            <p className="text-xs opacity-70 mt-1">Supabase no está configurado correctamente.</p>
           </div>
         </div>
       )}
 
-      <div className={`bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border ${theme.border} transition-colors duration-500`}>
-        <div className="flex justify-between items-center mb-6">
-             <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                <Upload className={theme.color} /> Nuevo
-            </h2>
-            <div className="bg-slate-900 p-1 rounded-lg flex gap-1">
-                <button 
-                    onClick={() => { setMode('file'); removeFile(); }}
-                    className={`p-2 rounded-md transition-all ${mode === 'file' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                >
-                    <ImageIcon size={18} />
-                </button>
-                <button 
-                    onClick={() => { setMode('audio'); removeFile(); }}
-                    className={`p-2 rounded-md transition-all ${mode === 'audio' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                >
-                    <Mic size={18} />
-                </button>
-                <button 
-                    onClick={() => { setMode('text'); removeFile(); }}
-                    className={`p-2 rounded-md transition-all ${mode === 'text' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                >
-                    <FileText size={18} />
-                </button>
-            </div>
-        </div>
-        
-        {/* FILE UPLOAD MODE */}
-        {mode === 'file' && (
-            !selectedFile ? (
-                <div 
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed transition-all rounded-2xl p-10 flex flex-col items-center justify-center cursor-pointer min-h-[240px] group ${
-                    dragActive 
-                    ? `${theme.border} bg-slate-700/50 scale-105` 
-                    : `border-slate-600 hover:${theme.border} hover:bg-slate-700/30`
-                }`}
-                >
-                <div className={`flex gap-4 mb-6 text-slate-400 group-hover:${theme.color} transition-colors`}>
-                    <Camera size={48} />
-                    <Video size={48} />
-                </div>
-                <p className="text-slate-200 font-semibold text-lg">Subir Archivo</p>
-                <p className="text-slate-500 mt-2 text-sm text-center">
-                    Soporta Fotos y Videos.<br/>
-                    Encriptación AES-256.
-                </p>
-                <input 
-                    ref={fileInputRef}
-                    type="file" 
-                    accept="image/*,video/*" 
-                    className="hidden" 
-                    onChange={handleFileChange}
-                />
-                </div>
-            ) : (
-                <div className="relative rounded-2xl overflow-hidden bg-black/40 border border-slate-600 group mb-6">
-                    {selectedFile.type.startsWith('video/') ? (
-                        <video src={previewUrl!} className="w-full max-h-60 object-contain" />
-                    ) : (
-                        <img src={previewUrl!} alt="Preview" className="w-full max-h-60 object-contain" />
-                    )}
-                    <button 
-                        onClick={removeFile}
-                        className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white p-2 rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
-                    >
-                        <X size={16} />
-                    </button>
-                    {isProcessing && (
-                         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-20">
-                             <div className="w-64 h-2 bg-slate-700 rounded-full overflow-hidden mb-4">
-                                 <div 
-                                    className={`h-full bg-gradient-to-r ${theme.gradient} transition-all duration-300`}
-                                    style={{ width: `${progress}%` }}
-                                 ></div>
-                             </div>
-                             <p className={`${theme.color} font-mono animate-pulse`}>Encriptando {progress}%</p>
-                         </div>
-                    )}
-                </div>
-            )
-        )}
+      <div className={`bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl rounded-[2rem] p-1 shadow-2xl border ${theme.border} transition-colors duration-500 relative`}>
+        {/* Glow Effect behind container */}
+        <div className={`absolute inset-0 rounded-[2rem] bg-gradient-to-br ${theme.gradient} opacity-5 blur-xl -z-10`}></div>
 
-        {/* AUDIO MODE */}
-        {mode === 'audio' && (
-             <div className="mb-6 rounded-2xl bg-slate-900/50 border border-slate-600 p-6 flex flex-col items-center justify-center min-h-[240px] relative">
+        <div className="bg-slate-50/50 dark:bg-slate-950/50 rounded-[1.8rem] p-6">
+            <div className="flex flex-col gap-6">
                 
-                {!selectedFile && !isRecording && (
-                    <>
-                        <button 
-                            onClick={startRecording}
-                            className={`w-20 h-20 rounded-full bg-slate-800 border-2 border-slate-600 flex items-center justify-center mb-4 hover:border-pink-500 hover:scale-105 transition-all group shadow-lg`}
-                        >
-                            <Mic size={32} className="text-slate-400 group-hover:text-pink-500 transition-colors" />
-                        </button>
-                        <p className="text-slate-300 font-semibold">Toca para grabar</p>
-                        <p className="text-slate-500 text-sm mt-2">o sube un archivo</p>
-                        <input 
-                            type="file" 
-                            accept="audio/*" 
-                            className="mt-4 text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-pink-400 hover:file:bg-slate-600"
-                            onChange={handleFileChange}
-                        />
-                    </>
-                )}
-
-                {isRecording && (
-                    <>
-                        <div className="animate-pulse w-24 h-24 rounded-full bg-pink-500/20 flex items-center justify-center mb-4 relative">
-                            <div className="absolute inset-0 border-4 border-pink-500 rounded-full animate-ping opacity-20"></div>
-                            <Mic size={40} className="text-pink-500" />
-                        </div>
-                        <p className="text-pink-400 font-mono text-2xl font-bold mb-6">{formatTime(recordingTime)}</p>
-                        <button 
-                            onClick={stopRecording}
-                            className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-full font-bold flex items-center gap-2 transition-all"
-                        >
-                            <StopCircle size={20} /> Detener
-                        </button>
-                    </>
-                )}
-
-                {selectedFile && !isRecording && (
-                    <div className="w-full">
-                        <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-pink-500/30 mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className="p-3 bg-pink-500/20 rounded-full text-pink-400">
-                                    <Play size={20} className="fill-current"/>
+                {/* Segmented Control */}
+                <div className="bg-slate-200 dark:bg-slate-900 p-1.5 rounded-2xl flex relative border border-slate-300 dark:border-white/5">
+                    {/* Sliding Background */}
+                    <div 
+                        className={`absolute top-1.5 bottom-1.5 rounded-xl bg-white dark:bg-slate-800 shadow-md transition-all duration-300 ease-out border border-slate-200 dark:border-white/5`}
+                        style={{
+                            left: mode === 'file' ? '0.375rem' : mode === 'audio' ? '25%' : mode === 'text' ? '50%' : '75%',
+                            width: 'calc(25% - 0.5rem)',
+                            transform: mode === 'audio' ? 'translateX(0.125rem)' : mode === 'text' ? 'translateX(0.125rem)' : mode === 'document' ? 'translateX(-0.375rem)' : 'none'
+                        }}
+                    ></div>
+                    
+                    <button 
+                        onClick={() => { setMode('file'); removeFile(); }}
+                        className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'file' ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                    >
+                        <ImageIcon size={20} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:block">Media</span>
+                    </button>
+                    <button 
+                        onClick={() => { setMode('audio'); removeFile(); }}
+                        className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'audio' ? 'text-pink-600 dark:text-pink-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                    >
+                        <Mic size={20} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:block">Voz</span>
+                    </button>
+                    <button 
+                        onClick={() => { setMode('text'); removeFile(); }}
+                        className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'text' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                    >
+                        <FileText size={20} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:block">Nota</span>
+                    </button>
+                     <button 
+                        onClick={() => { setMode('document'); removeFile(); }}
+                        className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'document' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                    >
+                        <Paperclip size={20} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:block">Docs</span>
+                    </button>
+                </div>
+                
+                {/* Content Area */}
+                <div className="min-h-[260px]">
+                    {/* FILE UPLOAD MODE */}
+                    {mode === 'file' && (
+                        !selectedFile ? (
+                            <div 
+                            onDragEnter={handleDrag}
+                            onDragLeave={handleDrag}
+                            onDragOver={handleDrag}
+                            onDrop={handleDrop}
+                            onClick={() => fileInputRef.current?.click()}
+                            className={`h-[260px] border-2 border-dashed transition-all duration-300 rounded-3xl flex flex-col items-center justify-center cursor-pointer group relative overflow-hidden ${
+                                dragActive 
+                                ? `${theme.border} bg-cyan-500/10` 
+                                : `border-slate-300 dark:border-slate-700 hover:border-cyan-500/50 hover:bg-slate-100 dark:hover:bg-slate-900`
+                            }`}
+                            >
+                                <div className={`w-20 h-20 rounded-full bg-slate-200 dark:bg-slate-900 flex items-center justify-center mb-4 transition-transform duration-500 group-hover:scale-110 border border-slate-300 dark:border-slate-700 group-hover:border-cyan-500/30 shadow-xl`}>
+                                    <Upload size={32} className="text-slate-400 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors" />
                                 </div>
-                                <div>
-                                    <p className="text-sm font-bold text-white">Audio Grabado</p>
-                                    <p className="text-xs text-slate-400">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                                <p className="text-slate-600 dark:text-slate-300 font-bold text-lg group-hover:text-slate-800 dark:group-hover:text-white transition-colors">Toca o Arrastra</p>
+                                <p className="text-slate-500 mt-2 text-xs text-center font-mono uppercase tracking-wide">
+                                    Imágenes • Videos
+                                </p>
+                                <input 
+                                    ref={fileInputRef}
+                                    type="file" 
+                                    accept="image/*,video/*" 
+                                    className="hidden" 
+                                    onChange={handleFileChange}
+                                />
+                            </div>
+                        ) : (
+                            <div className="relative h-[260px] rounded-3xl overflow-hidden bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 group">
+                                {selectedFile.type.startsWith('video/') ? (
+                                    <video src={previewUrl!} className="w-full h-full object-contain bg-black" />
+                                ) : (
+                                    <img src={previewUrl!} alt="Preview" className="w-full h-full object-contain bg-black" />
+                                )}
+                                
+                                <button 
+                                    onClick={removeFile}
+                                    className="absolute top-3 right-3 bg-white/80 dark:bg-slate-900/80 hover:bg-red-500 text-slate-800 dark:text-white hover:text-white p-2 rounded-full backdrop-blur-md transition-all border border-slate-200 dark:border-white/10 z-10 shadow-sm"
+                                >
+                                    <X size={18} />
+                                </button>
+                                {isProcessing && <ProgressOverlay />}
+                            </div>
+                        )
+                    )}
+
+                    {/* DOCUMENT MODE */}
+                    {mode === 'document' && (
+                        !selectedFile ? (
+                            <div 
+                            onDragEnter={handleDrag}
+                            onDragLeave={handleDrag}
+                            onDragOver={handleDrag}
+                            onDrop={handleDrop}
+                            onClick={() => fileInputRef.current?.click()}
+                            className={`h-[260px] border-2 border-dashed transition-all duration-300 rounded-3xl flex flex-col items-center justify-center cursor-pointer group relative overflow-hidden ${
+                                dragActive 
+                                ? `${theme.border} bg-emerald-500/10` 
+                                : `border-slate-300 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-slate-100 dark:hover:bg-slate-900`
+                            }`}
+                            >
+                                <div className={`w-20 h-20 rounded-full bg-slate-200 dark:bg-slate-900 flex items-center justify-center mb-4 transition-transform duration-500 group-hover:scale-110 border border-slate-300 dark:border-slate-700 group-hover:border-emerald-500/30 shadow-xl`}>
+                                    <FileIcon size={32} className="text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+                                </div>
+                                <p className="text-slate-600 dark:text-slate-300 font-bold text-lg group-hover:text-slate-800 dark:group-hover:text-white transition-colors">Subir Documento</p>
+                                <p className="text-slate-500 mt-2 text-xs text-center font-mono uppercase tracking-wide">
+                                    PDF • DOCX • TXT
+                                </p>
+                                <input 
+                                    ref={fileInputRef}
+                                    type="file" 
+                                    accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx" 
+                                    className="hidden" 
+                                    onChange={handleFileChange}
+                                />
+                            </div>
+                        ) : (
+                            <div className="relative h-[260px] rounded-3xl overflow-hidden bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 group flex flex-col items-center justify-center">
+                                <div className="w-24 h-24 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-4 border border-emerald-500/20">
+                                    <FileIcon size={48} className="text-emerald-600 dark:text-emerald-400" />
+                                </div>
+                                <p className="text-emerald-600 dark:text-emerald-300 font-bold max-w-[80%] truncate">{selectedFile.name}</p>
+                                <p className="text-emerald-600/60 dark:text-emerald-500/50 text-xs font-mono mt-1">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                
+                                <button 
+                                    onClick={removeFile}
+                                    className="absolute top-3 right-3 bg-white/80 dark:bg-slate-900/80 hover:bg-red-500 text-slate-800 dark:text-white hover:text-white p-2 rounded-full backdrop-blur-md transition-all border border-slate-200 dark:border-white/10 z-10 shadow-sm"
+                                >
+                                    <X size={18} />
+                                </button>
+                                {isProcessing && <ProgressOverlay />}
+                            </div>
+                        )
+                    )}
+
+                    {/* AUDIO MODE */}
+                    {mode === 'audio' && (
+                        <div className="h-[260px] rounded-3xl bg-slate-100/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden">
+                            
+                            {!selectedFile && !isRecording && (
+                                <div className="text-center animate-fade-in">
+                                    <button 
+                                        onClick={startRecording}
+                                        className={`w-24 h-24 rounded-full bg-slate-200 dark:bg-slate-800 border-4 border-slate-300 dark:border-slate-700 flex items-center justify-center mb-6 hover:border-pink-500 hover:shadow-[0_0_30px_rgba(236,72,153,0.3)] hover:scale-105 transition-all group shadow-2xl`}
+                                    >
+                                        <Mic size={40} className="text-slate-400 group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors" />
+                                    </button>
+                                    <p className="text-slate-500 dark:text-slate-400 text-xs font-mono uppercase tracking-widest">Grabar Audio</p>
+                                    
+                                    <div className="mt-4 flex justify-center">
+                                        <label className="cursor-pointer px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-pink-600 dark:text-pink-400 text-xs font-bold transition-colors border border-slate-300 dark:border-slate-700">
+                                            Subir Archivo
+                                            <input 
+                                                type="file" 
+                                                accept="audio/*" 
+                                                className="hidden"
+                                                onChange={handleFileChange}
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+
+                            {isRecording && (
+                                <>
+                                    <div className="absolute inset-0 bg-pink-500/5 animate-pulse"></div>
+                                    <div className="relative z-10 flex flex-col items-center">
+                                        <div className="w-24 h-24 rounded-full border-4 border-pink-500 flex items-center justify-center mb-6 relative">
+                                            <div className="absolute inset-0 bg-pink-500 rounded-full opacity-20 animate-ping"></div>
+                                            <Mic size={40} className="text-pink-500" />
+                                        </div>
+                                        <p className="text-pink-600 dark:text-pink-400 font-mono text-3xl font-bold mb-6 tracking-widest">{formatTime(recordingTime)}</p>
+                                        <button 
+                                            onClick={stopRecording}
+                                            className="bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-full font-bold flex items-center gap-2 transition-all shadow-lg hover:shadow-red-500/30"
+                                        >
+                                            <StopCircle size={20} /> DETENER
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+
+                            {selectedFile && !isRecording && (
+                                <div className="w-full px-6 animate-fade-in">
+                                    <div className="bg-slate-200 dark:bg-slate-950 p-4 rounded-2xl border border-pink-500/30 mb-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center text-pink-600 dark:text-pink-400">
+                                                <Play size={20} className="ml-1" />
+                                            </div>
+                                            <div>
+                                                <p className="text-slate-800 dark:text-white text-sm font-bold">Nota de Voz</p>
+                                                <p className="text-pink-600/60 dark:text-pink-400/60 text-xs font-mono">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                                            </div>
+                                        </div>
+                                        <button onClick={removeFile} className="text-slate-500 hover:text-red-500 transition-colors p-2">
+                                            <Trash2 size={20} />
+                                        </button>
+                                    </div>
+                                    <audio controls src={previewUrl!} className="w-full h-10 opacity-60 hover:opacity-100 transition-opacity" />
+                                </div>
+                            )}
+                            
+                            {isProcessing && <ProgressOverlay />}
+                        </div>
+                    )}
+
+                    {/* TEXT MODE */}
+                    {mode === 'text' && (
+                        <div className="h-[260px] relative">
+                            <textarea 
+                                value={textContent}
+                                onChange={(e) => setTextContent(e.target.value)}
+                                placeholder="> Inicia transmisión de texto seguro..."
+                                className={`w-full h-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-3xl p-6 text-slate-800 dark:text-slate-200 focus:${theme.border} focus:outline-none resize-none font-mono text-sm placeholder-slate-400 dark:placeholder-slate-600 transition-colors leading-relaxed`}
+                                disabled={isProcessing}
+                            />
+                            {isProcessing && <ProgressOverlay />}
+                        </div>
+                    )}
+                </div>
+
+                {/* OPTIONS PANEL */}
+                <div className="bg-slate-200 dark:bg-slate-900 rounded-2xl p-4 border border-slate-300 dark:border-slate-800">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3 ml-1">Configuración de Seguridad</p>
+                    
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                         {/* Expiration */}
+                        <div className="bg-slate-100 dark:bg-slate-950 p-3 rounded-xl border border-slate-300 dark:border-slate-800 flex flex-col justify-between">
+                            <label className="text-slate-500 dark:text-slate-400 text-xs font-bold flex items-center gap-1.5 mb-2">
+                                <Clock size={12} /> TTL (Tiempo)
+                            </label>
+                            <select 
+                                value={duration}
+                                onChange={(e) => setDuration(Number(e.target.value))}
+                                className={`w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-xs font-mono rounded-lg p-2 border border-slate-300 dark:border-slate-700 focus:outline-none focus:border-cyan-500 transition-colors`}
+                                disabled={isProcessing}
+                            >
+                                <option value={1}>1 Minuto</option>
+                                <option value={5}>5 Minutos</option>
+                                <option value={60}>1 Hora</option>
+                                <option value={1440}>24 Horas</option>
+                            </select>
+                        </div>
+
+                        {/* Burn On Read */}
+                        <button 
+                            onClick={() => !isProcessing && setBurnOnRead(!burnOnRead)}
+                            className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
+                                burnOnRead 
+                                ? 'bg-orange-500/10 border-orange-500/50' 
+                                : 'bg-slate-100 dark:bg-slate-950 border-slate-300 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
+                            }`}
+                        >
+                            <label className={`text-xs font-bold flex items-center gap-1.5 ${burnOnRead ? 'text-orange-500 dark:text-orange-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                                <Flame size={12} /> Auto-Destruir
+                            </label>
+                            <div className="flex justify-between items-center mt-2 w-full">
+                                <span className="text-[10px] text-slate-500">{burnOnRead ? 'Activado' : 'Desactivado'}</span>
+                                <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${burnOnRead ? 'bg-orange-500' : 'bg-slate-400 dark:bg-slate-700'}`}>
+                                    <div className={`bg-white w-3 h-3 rounded-full shadow-sm transform transition-transform ${burnOnRead ? 'translate-x-4' : 'translate-x-0'}`}></div>
                                 </div>
                             </div>
-                            <button onClick={removeFile} className="p-2 text-slate-400 hover:text-red-400 transition-colors">
-                                <Trash2 size={18} />
-                            </button>
+                        </button>
+                    </div>
+
+                    {/* Password */}
+                    <div className={`rounded-xl border transition-all overflow-hidden ${showPasswordInput ? 'bg-slate-100 dark:bg-slate-950 border-slate-300 dark:border-slate-700' : 'bg-slate-100 dark:bg-slate-950 border-slate-300 dark:border-slate-800'}`}>
+                         <div 
+                            onClick={() => setShowPasswordInput(!showPasswordInput)}
+                            className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-900 transition-colors"
+                        >
+                            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                                <Lock size={12} />
+                                <span className="text-xs font-bold">Contraseña Adicional</span>
+                            </div>
+                            <span className={`text-[10px] px-2 py-0.5 rounded border ${password ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 'text-slate-500 border-slate-300 dark:border-slate-700'}`}>
+                                {password ? 'ON' : 'OFF'}
+                            </span>
                         </div>
-                        <audio controls src={previewUrl!} className="w-full opacity-80 h-10 mb-2" />
+                        {showPasswordInput && (
+                            <div className="px-3 pb-3 pt-0 animate-fade-in">
+                                <input 
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Clave secreta..."
+                                    className="w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-sm rounded-lg p-2 border border-slate-300 dark:border-slate-700 focus:border-slate-500 dark:focus:border-white focus:outline-none placeholder-slate-400 dark:placeholder-slate-600 font-mono"
+                                />
+                            </div>
+                        )}
                     </div>
-                )}
-                
-                {isProcessing && (
-                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-20 rounded-2xl">
-                         <Loader2 className={`animate-spin ${theme.color} mb-2`} size={32} />
-                         <p className={`${theme.color} font-mono text-sm`}>Cifrando Audio...</p>
-                     </div>
-                )}
-             </div>
-        )}
-
-        {/* TEXT MODE */}
-        {mode === 'text' && (
-            <div className="mb-6 relative">
-                 <textarea 
-                    value={textContent}
-                    onChange={(e) => setTextContent(e.target.value)}
-                    placeholder="Escribe tu secreto aquí..."
-                    className={`w-full h-60 bg-slate-900/50 border border-slate-600 rounded-2xl p-4 text-slate-200 focus:${theme.border} focus:outline-none resize-none font-mono text-sm placeholder-slate-600 transition-colors`}
-                    disabled={isProcessing}
-                 />
-                 {isProcessing && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-20 rounded-2xl">
-                        <Loader2 className={`animate-spin ${theme.color} mb-2`} size={32} />
-                        <p className={`${theme.color} font-mono text-sm`}>Cifrando Nota...</p>
-                    </div>
-                )}
-            </div>
-        )}
-
-        {/* OPTIONS & SUBMIT */}
-        <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-                {/* Time Selector */}
-                <div className="col-span-1 bg-slate-900/50 p-3 rounded-xl border border-slate-700">
-                    <label className="text-slate-400 text-xs font-bold uppercase mb-2 block flex items-center gap-1">
-                        <Clock size={12} /> Expiración
-                    </label>
-                    <select 
-                        value={duration}
-                        onChange={(e) => setDuration(Number(e.target.value))}
-                        className={`w-full bg-slate-800 text-white text-sm rounded-lg p-2 border border-slate-600 focus:${theme.border} focus:outline-none`}
-                        disabled={isProcessing}
-                    >
-                        <option value={1}>1 Minuto</option>
-                        <option value={5}>5 Minutos</option>
-                        <option value={60}>1 Hora</option>
-                        <option value={1440}>1 Día</option>
-                    </select>
                 </div>
 
-                {/* Burn On Read Toggle */}
-                <div 
-                    onClick={() => !isProcessing && setBurnOnRead(!burnOnRead)}
-                    className={`col-span-1 p-3 rounded-xl border cursor-pointer transition-all ${
-                        burnOnRead 
-                        ? 'bg-orange-500/20 border-orange-500' 
-                        : 'bg-slate-900/50 border-slate-700 hover:border-slate-500'
+                {/* Main Action */}
+                <button
+                    onClick={handleInitialSubmit}
+                    disabled={isProcessing || isGeneratingCode || !isSupabaseConfigured() || (mode === 'file' && !selectedFile) || (mode === 'text' && !textContent.trim()) || (mode === 'audio' && !selectedFile) || (mode === 'document' && !selectedFile)}
+                    className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-lg relative overflow-hidden group ${
+                        isProcessing || isGeneratingCode || (mode === 'file' && !selectedFile) || (mode === 'text' && !textContent.trim()) || (mode === 'audio' && !selectedFile) || (mode === 'document' && !selectedFile)
+                        ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50' 
+                        : `bg-gradient-to-r ${theme.gradient} text-white ${theme.shadow} hover:brightness-110 hover:-translate-y-0.5`
                     }`}
                 >
-                    <label className={`text-xs font-bold uppercase mb-2 block flex items-center gap-1 ${burnOnRead ? 'text-orange-400' : 'text-slate-400'}`}>
-                        <Flame size={12} /> Auto-Destruir
-                    </label>
-                    <div className="flex items-center gap-2">
-                            <div className={`w-10 h-5 rounded-full p-1 transition-colors ${burnOnRead ? 'bg-orange-500' : 'bg-slate-600'}`}>
-                                <div className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform ${burnOnRead ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                            </div>
-                            <span className="text-xs text-slate-300">{burnOnRead ? 'Si' : 'No'}</span>
-                    </div>
-                </div>
+                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                    {isProcessing || isGeneratingCode ? (
+                        <Loader2 className="animate-spin" />
+                    ) : (
+                        <>
+                            <Shield size={20} /> CREAR ARCHIVO SEGURO
+                        </>
+                    )}
+                </button>
             </div>
-
-            {/* Burn Timer Settings (Only if BurnOnRead is active) */}
-            {burnOnRead && (
-                 <div className="bg-orange-900/10 border border-orange-500/30 rounded-xl p-3 animate-fade-in">
-                    <label className="text-orange-400 text-xs font-bold uppercase mb-2 block flex items-center gap-1">
-                        <Eye size={12} /> Tiempo de lectura (antes de quemarse)
-                    </label>
-                    <div className="flex gap-2">
-                        {[5, 10, 30, 60].map((sec) => (
-                            <button
-                                key={sec}
-                                onClick={() => setBurnDelay(sec)}
-                                className={`flex-1 py-1.5 rounded-lg text-xs font-mono border transition-all ${
-                                    burnDelay === sec 
-                                    ? 'bg-orange-500 text-white border-orange-500' 
-                                    : 'bg-slate-800 text-slate-400 border-slate-600 hover:border-orange-500/50'
-                                }`}
-                            >
-                                {sec}s
-                            </button>
-                        ))}
-                    </div>
-                 </div>
-            )}
-
-            {/* Password Toggle */}
-            <div className="bg-slate-900/50 rounded-xl border border-slate-700 overflow-hidden">
-                <div 
-                    onClick={() => setShowPasswordInput(!showPasswordInput)}
-                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-800 transition-colors"
-                >
-                    <label className="text-slate-400 text-xs font-bold uppercase flex items-center gap-1 pointer-events-none">
-                        <Lock size={12} /> Proteger con Contraseña
-                    </label>
-                    <div className={`text-xs px-2 py-0.5 rounded ${password ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-500'}`}>
-                        {password ? 'Activado' : 'Opcional'}
-                    </div>
-                </div>
-                {showPasswordInput && (
-                    <div className="p-3 pt-0 animate-fade-in">
-                        <input 
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Contraseña extra..."
-                            className="w-full bg-slate-800 text-white text-sm rounded-lg p-2 border border-slate-600 focus:border-white focus:outline-none"
-                        />
-                        <p className="text-[10px] text-slate-500 mt-1">
-                            Si olvidas la contraseña, el archivo será irrecuperable.
-                        </p>
-                    </div>
-                )}
-            </div>
-
-            {/* Main Action */}
-            <button
-                onClick={handleInitialSubmit}
-                disabled={isProcessing || !isSupabaseConfigured() || (mode === 'file' && !selectedFile) || (mode === 'text' && !textContent.trim()) || (mode === 'audio' && !selectedFile)}
-                className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-xl relative overflow-hidden group mt-2 ${
-                    isProcessing || (mode === 'file' && !selectedFile) || (mode === 'text' && !textContent.trim()) || (mode === 'audio' && !selectedFile)
-                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed' 
-                    : `bg-gradient-to-r ${theme.gradient} text-white ${theme.shadow}`
-                }`}
-            >
-                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                {isProcessing ? (
-                    <Loader2 className="animate-spin" />
-                ) : (
-                    <>
-                        <Shield size={20} /> Crear {mode === 'text' ? 'Nota' : (mode === 'audio' ? 'Audio' : 'Archivo')} Seguro
-                    </>
-                )}
-            </button>
         </div>
       </div>
     </div>

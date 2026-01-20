@@ -104,11 +104,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, autoPlay = false }) => {
   });
 
   return (
-    <div className="w-full bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-inner">
+    <div className="w-full bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl p-4 shadow-inner">
       <audio ref={audioRef} src={src} preload="metadata" />
       
       {/* Top Row: Waveform & Time */}
-      <div className="flex items-center justify-between mb-4 h-16 bg-slate-800/50 rounded-xl px-4 overflow-hidden relative">
+      <div className="flex items-center justify-between mb-4 h-16 bg-white/50 dark:bg-slate-800/50 rounded-xl px-4 overflow-hidden relative">
          <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-80 h-full py-2">
             {bars}
          </div>
@@ -130,15 +130,15 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, autoPlay = false }) => {
               max="100" 
               value={progress} 
               onChange={handleSeek}
-              className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-pink-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg"
+              className="w-full h-1 bg-slate-300 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-pink-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg"
            />
-           <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
+           <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-mono">
               <span>{formatTime(currentTime)}</span>
               <span>{formatTime(duration)}</span>
            </div>
         </div>
 
-        <button onClick={toggleMute} className="text-slate-400 hover:text-white transition-colors">
+        <button onClick={toggleMute} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
           {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
         </button>
       </div>

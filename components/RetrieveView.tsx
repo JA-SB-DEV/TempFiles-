@@ -3,7 +3,8 @@ import { TempFile } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { decryptFile } from '../utils/crypto';
 import AudioPlayer from './AudioPlayer';
-import { Search, Clock, EyeOff, FileImage, FileVideo, AlertTriangle, Loader2, Database, Eye, Flame, Unlock, Shield, FileText, Copy, Check, Music, Lock, KeyRound, X, Maximize2 } from 'lucide-react';
+import VideoPlayer from './VideoPlayer';
+import { Search, Clock, EyeOff, FileImage, FileVideo, AlertTriangle, Loader2, Database, Eye, Flame, Unlock, Shield, FileText, Copy, Check, Music, Lock, KeyRound, X, Maximize2, Terminal, Download, File as FileIcon } from 'lucide-react';
 
 interface RetrieveViewProps {
   initialCode?: string;
@@ -13,18 +14,18 @@ interface RetrieveViewProps {
 const getRetrieveTheme = (type?: string) => {
     if (type === 'text') {
         return {
-            color: 'text-amber-400',
-            border: 'border-amber-500',
+            color: 'text-amber-600 dark:text-amber-400',
+            border: 'border-amber-500/50',
             bg: 'bg-amber-600',
             gradient: 'from-amber-500 to-orange-600',
-            btnBg: 'bg-emerald-600 hover:bg-emerald-500', // Keep search button emerald
+            btnBg: 'bg-emerald-600 hover:bg-emerald-500', 
             ring: 'focus:border-amber-500'
         };
     }
     if (type === 'audio') {
         return {
-            color: 'text-pink-400',
-            border: 'border-pink-500',
+            color: 'text-pink-600 dark:text-pink-400',
+            border: 'border-pink-500/50',
             bg: 'bg-pink-600',
             gradient: 'from-pink-500 to-rose-600',
             btnBg: 'bg-emerald-600 hover:bg-emerald-500',
@@ -33,18 +34,28 @@ const getRetrieveTheme = (type?: string) => {
     }
     if (type === 'video') {
         return {
-            color: 'text-violet-400',
-            border: 'border-violet-500',
+            color: 'text-violet-600 dark:text-violet-400',
+            border: 'border-violet-500/50',
             bg: 'bg-violet-600',
             gradient: 'from-violet-600 to-fuchsia-600',
             btnBg: 'bg-emerald-600 hover:bg-emerald-500',
             ring: 'focus:border-violet-500'
         };
     }
+    if (type === 'document') {
+        return {
+            color: 'text-emerald-600 dark:text-emerald-400',
+            border: 'border-emerald-500/50',
+            bg: 'bg-emerald-600',
+            gradient: 'from-emerald-500 to-teal-600',
+            btnBg: 'bg-emerald-600 hover:bg-emerald-500',
+            ring: 'focus:border-emerald-500'
+        };
+    }
     // Default / Image
     return {
-        color: 'text-cyan-400',
-        border: 'border-cyan-500',
+        color: 'text-cyan-600 dark:text-cyan-400',
+        border: 'border-cyan-500/50',
         bg: 'bg-cyan-600',
         gradient: 'from-cyan-600 to-blue-600',
         btnBg: 'bg-emerald-600 hover:bg-emerald-500',
@@ -113,13 +124,13 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
         .single();
 
       if (dbError || !data) {
-        throw new Error("Código inválido o archivo no encontrado.");
+        throw new Error("404: Archivo no encontrado o eliminado.");
       }
 
       // 2. Check Expiration
       const expiresAt = new Date(data.expires_at).getTime();
       if (Date.now() > expiresAt) {
-        throw new Error("Este archivo ha expirado.");
+        throw new Error("TTL Expired: Archivo autodestruido.");
       }
 
       // 3. Get Download URL
@@ -129,9 +140,9 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
 
       if (signedError || !signedUrlData) {
          if (signedError?.message.includes("bucket")) {
-             throw new Error("Error de configuración: Bucket no encontrado.");
+             throw new Error("Error: Storage bucket inaccesible.");
          }
-        throw new Error("Error de acceso al archivo.");
+        throw new Error("Error: Acceso denegado al objeto.");
       }
 
       // Basic file info before decryption
@@ -147,7 +158,7 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
       
       // Fetch the encrypted blob immediately
       const response = await fetch(signedUrlData.signedUrl);
-      if (!response.ok) throw new Error("Error descargando el archivo cifrado");
+      if (!response.ok) throw new Error("Error de red al descargar paquete cifrado.");
       const encryptedBlob = await response.blob();
       
       setCachedBlob(encryptedBlob);
@@ -158,7 +169,7 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
       attemptDecryption(encryptedBlob, fileInfo, targetCode);
 
     } catch (err: any) {
-      setError(err.message || "Error al buscar.");
+      setError(err.message || "Error desconocido.");
       setIsSearching(false);
     }
   }, []);
@@ -175,6 +186,11 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
           if (mimeType === 'text/plain') fileType = 'text';
           else if (mimeType.startsWith('video/')) fileType = 'video';
           else if (mimeType.startsWith('audio/')) fileType = 'audio';
+          else if (mimeType === 'application/pdf' || 
+                   mimeType.includes('document') || 
+                   mimeType.includes('msword') || 
+                   mimeType.includes('sheet') ||
+                   mimeType.includes('presentation')) fileType = 'document';
 
           if (mimeType === 'text/plain') {
             const text = await decryptedBlob.text();
@@ -201,7 +217,7 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
              setIsPasswordLocked(true);
              setIsSearching(false);
           } else {
-             setError("Contraseña incorrecta.");
+             setError("Clave de desencriptación incorrecta.");
           }
       } finally {
           setIsDecrypting(false);
@@ -301,35 +317,41 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
       
       {/* Search Input State */}
       {!foundFile && !isDecrypting && !isPasswordLocked && (
-        <div className="bg-slate-800/80 backdrop-blur-xl rounded-2xl p-6 shadow-xl border border-slate-700">
-          <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-2">
-            <Unlock className="text-emerald-400" /> Desencriptar
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-slate-200 dark:border-slate-700/50">
+          <h2 className="text-2xl font-bold mb-6 text-slate-900 dark:text-white flex items-center gap-3">
+            <Terminal className="text-emerald-500 dark:text-emerald-400" /> 
+            <span>Terminal de Acceso</span>
           </h2>
           
-          <form onSubmit={handleSearch} className="flex flex-col gap-4">
-            <div>
-              <label className="text-slate-400 text-sm mb-2 block">Código de archivo</label>
-              <input 
-                type="text" 
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
-                placeholder="Ej. ABC-123"
-                className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-4 text-xl text-center font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors uppercase tracking-widest"
-              />
+          <form onSubmit={handleSearch} className="flex flex-col gap-6">
+            <div className="relative group">
+              <label className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2 block ml-1">Código de Encriptación</label>
+              <div className="relative">
+                  <input 
+                    type="text" 
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                    placeholder="XXX-XXX"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-2xl px-4 py-5 text-2xl text-center font-mono text-emerald-600 dark:text-emerald-400 placeholder-slate-400 dark:placeholder-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 transition-all uppercase tracking-[0.2em]"
+                  />
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-700 group-focus-within:text-emerald-500/50 transition-colors">
+                      <KeyRound size={20} />
+                  </div>
+              </div>
             </div>
             
             <button 
               type="submit"
-              disabled={isSearching}
-              className="w-full font-bold py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg flex justify-center items-center gap-2 transition-all"
+              disabled={isSearching || code.length < 3}
+              className="w-full font-bold py-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.2)] flex justify-center items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-1"
             >
-              {isSearching ? <Loader2 className="animate-spin" /> : "Buscar y Abrir"}
+              {isSearching ? <Loader2 className="animate-spin" /> : "DESENCRIPTAR Y ABRIR"}
             </button>
           </form>
 
           {error && (
-            <div className="mt-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl flex items-center gap-3 text-red-200 animate-pulse">
-              <EyeOff />
+            <div className="mt-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3 text-red-600 dark:text-red-300 animate-pulse text-sm">
+              <AlertTriangle className="shrink-0" size={18} />
               <p>{error}</p>
             </div>
           )}
@@ -338,33 +360,39 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
 
       {/* Decrypting Loading State */}
       {isDecrypting && !isPasswordLocked && (
-          <div className="text-center py-20 bg-slate-800/50 rounded-2xl border border-slate-700 backdrop-blur-sm">
-              <Loader2 className="animate-spin w-12 h-12 text-emerald-400 mx-auto mb-4" />
-              <p className="text-xl font-mono text-emerald-400">Desencriptando...</p>
-              <p className="text-sm text-slate-400">Verificando firma digital...</p>
+          <div className="text-center py-24 bg-white/50 dark:bg-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 backdrop-blur-md">
+              <div className="relative inline-block mb-6">
+                  <div className="absolute inset-0 bg-emerald-500/30 blur-xl rounded-full animate-pulse"></div>
+                  <Loader2 className="animate-spin w-16 h-16 text-emerald-500 dark:text-emerald-400 relative z-10" />
+              </div>
+              <p className="text-2xl font-mono text-emerald-600 dark:text-emerald-400 font-bold mb-2">ACCESSING...</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">Verificando firma AES-256-GCM</p>
           </div>
       )}
 
       {/* Password Locked State */}
       {isPasswordLocked && cachedFileInfo && (
-          <div className="bg-slate-800/90 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-red-500/30 text-center animate-fade-in relative overflow-hidden">
+          <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-red-500/30 text-center animate-fade-in relative overflow-hidden">
              {isDecrypting && (
-                 <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+                 <div className="absolute inset-0 bg-white/90 dark:bg-slate-950/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
                       <Loader2 className="animate-spin w-10 h-10 text-red-500 mb-2" />
-                      <p className="text-red-400 font-bold animate-pulse">Desbloqueando...</p>
+                      <p className="text-red-500 dark:text-red-400 font-bold animate-pulse font-mono">UNLOCKING...</p>
                  </div>
              )}
-             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-orange-500 to-red-500"></div>
-             <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-6 ring-4 ring-slate-700">
-                <Lock size={32} className="text-red-400" />
+             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 via-orange-500 to-red-600 animate-pulse"></div>
+             
+             <div className="w-24 h-24 bg-slate-50 dark:bg-slate-950 rounded-full flex items-center justify-center mx-auto mb-6 ring-4 ring-slate-200 dark:ring-slate-800 border border-red-500/20 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+                <Lock size={36} className="text-red-500" />
              </div>
-             <h3 className="text-2xl font-bold text-white mb-2">Archivo Protegido</h3>
-             <p className="text-slate-400 text-sm mb-6">
-                Este archivo ha sido cifrado con una capa de seguridad adicional.
+             
+             <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Acceso Restringido</h3>
+             <p className="text-slate-500 dark:text-slate-400 text-sm mb-8 px-4">
+                El archivo requiere autenticación de segundo factor (contraseña).
              </p>
+             
              <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                <div className="relative">
-                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <div className="relative group">
+                    <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-600 group-focus-within:text-red-500 transition-colors" size={20} />
                     <input 
                         type="password" 
                         value={passwordInput}
@@ -372,20 +400,20 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                         placeholder="Ingresa la contraseña"
                         autoFocus
                         disabled={isDecrypting}
-                        className="w-full bg-slate-900 border border-slate-600 rounded-xl pl-10 pr-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-red-500 transition-colors disabled:opacity-50"
+                        className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl pl-12 pr-4 py-4 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-700 focus:outline-none focus:border-red-500 transition-colors disabled:opacity-50 font-mono"
                     />
                 </div>
                 <button 
                   type="submit"
                   disabled={isDecrypting}
-                  className="w-full font-bold py-3 rounded-xl bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white shadow-lg transition-all disabled:opacity-50"
+                  className="w-full font-bold py-4 rounded-xl bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white shadow-lg transition-all disabled:opacity-50 hover:shadow-red-500/20"
                 >
-                  Desbloquear
+                  DESBLOQUEAR
                 </button>
              </form>
              {error && (
-                <p className="mt-4 text-red-400 text-sm font-semibold animate-pulse bg-red-500/10 p-2 rounded-lg">
-                    {error}
+                <p className="mt-6 text-red-500 dark:text-red-400 text-sm font-mono font-bold animate-pulse bg-red-100 dark:bg-red-950/30 p-2 rounded-lg border border-red-500/20">
+                    &gt; {error}
                 </p>
              )}
           </div>
@@ -393,61 +421,97 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
 
       {/* Found & Decrypted State (Success) */}
       {!isPasswordLocked && foundFile && (decryptedUrl || decryptedText) && (
-        <div className={`bg-slate-800 rounded-2xl overflow-hidden shadow-2xl border ${theme.border} relative group select-none transition-colors duration-500`}>
+        <div className={`bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border ${theme.border} relative group select-none transition-colors duration-500`}>
+          
+          {/* Header Bar */}
+          <div className="h-14 bg-slate-50 dark:bg-slate-950 flex items-center justify-between px-6 border-b border-slate-200 dark:border-white/5">
+                <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500"></div>
+                    <div className="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500"></div>
+                    <div className="w-3 h-3 rounded-full bg-green-500/20 border border-green-500"></div>
+                </div>
+                <div className="flex items-center gap-2 text-slate-500 text-[10px] font-mono uppercase tracking-widest">
+                    <Shield size={12} className={theme.color}/>
+                    SECURE VIEWER
+                </div>
+          </div>
+
           {/* Timer Badge */}
-          <div className="absolute top-4 right-4 bg-red-500/90 text-white px-3 py-1 rounded-full text-sm font-bold flex items-center gap-2 shadow-lg z-20">
-            <Clock size={14} /> {timeLeft}
+          <div className="absolute top-16 right-4 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md text-slate-800 dark:text-white px-3 py-1.5 rounded-lg text-xs font-mono border border-slate-200 dark:border-slate-700 shadow-xl z-20 flex items-center gap-2">
+            <Clock size={12} className="text-red-500 dark:text-red-400" /> 
+            <span className="text-red-600 dark:text-red-100">{timeLeft}</span>
           </div>
 
           {/* Burn Badge */}
           {foundFile.options?.burnOnRead && (
-              <div className={`absolute top-4 left-4 text-white px-3 py-1 rounded-full text-sm font-bold flex items-center gap-2 shadow-lg z-20 transition-all ${
-                  burnStatus === 'burning' ? 'bg-orange-600 animate-pulse' : 
-                  burnStatus === 'burnt' ? 'bg-gray-800' :
-                  'bg-orange-500/90'
+              <div className={`absolute top-16 left-4 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 shadow-xl z-20 transition-all backdrop-blur-md border ${
+                  burnStatus === 'burning' ? 'bg-orange-500/90 text-white border-orange-400 animate-pulse' : 
+                  burnStatus === 'burnt' ? 'bg-slate-200 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700' :
+                  'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30'
               }`}>
-                  <Flame size={14} /> 
-                  {burnStatus === 'burnt' ? 'Destruido' : 
-                   burnStatus === 'burning' ? 'Incinerando...' : 
-                   burnCountdown !== null ? `Auto-Destrucción en ${burnCountdown}s` :
-                   'Auto-Destrucción'}
+                  <Flame size={12} /> 
+                  {burnStatus === 'burnt' ? 'DESTRUIDO' : 
+                   burnStatus === 'burning' ? 'INCINERANDO...' : 
+                   burnCountdown !== null ? `DESTRUCCIÓN: ${burnCountdown}s` :
+                   'AUTO-DESTRUCCIÓN'}
               </div>
           )}
-
-          <div className={`p-1 bg-gradient-to-r ${theme.gradient}`}></div>
           
-          <div className="bg-black/90 min-h-[400px] flex items-center justify-center relative overflow-hidden p-4">
-            
+          <div className="bg-slate-100 dark:bg-black/80 min-h-[450px] flex items-center justify-center relative overflow-hidden p-1">
+             {/* Background Grid inside viewer */}
+             <div className="absolute inset-0 bg-grid-pattern opacity-5 dark:opacity-10 pointer-events-none"></div>
+
             {/* --- BURN ANIMATION CONTAINER --- */}
             <div className={`relative w-full h-full flex items-center justify-center transition-all duration-700 ${!isRevealed ? 'spoiler-blur' : 'revealed'} ${burnStatus === 'burning' ? 'burn-active' : ''}`}>
                 
                 {foundFile.type === 'video' && decryptedUrl ? (
-                  <video src={decryptedUrl} controls={isRevealed && burnStatus !== 'burning'} autoPlay={isRevealed} className="max-w-full max-h-[70vh]" />
+                   <div className="w-full h-full flex items-center justify-center bg-black rounded-lg overflow-hidden">
+                       <VideoPlayer src={decryptedUrl} autoPlay={isRevealed && burnStatus !== 'burning'} />
+                   </div>
                 ) : foundFile.type === 'audio' && decryptedUrl ? (
                    <div className="w-full max-w-sm px-6">
                         <AudioPlayer src={decryptedUrl} autoPlay={isRevealed && burnStatus !== 'burning'} />
                    </div> 
                 ) : foundFile.type === 'text' && decryptedText ? (
-                   <div className={`w-full h-full bg-slate-900 border border-slate-700 p-6 rounded-lg font-mono ${theme.color} whitespace-pre-wrap overflow-auto max-h-[60vh] shadow-inner text-sm relative`}>
+                   <div className={`w-full mx-4 h-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-8 rounded-xl font-mono ${theme.color} whitespace-pre-wrap overflow-auto max-h-[60vh] shadow-inner text-sm relative leading-relaxed`}>
                        {decryptedText}
                        {isRevealed && burnStatus !== 'burning' && (
                            <button 
                                 onClick={handleCopyText}
-                                className="absolute top-2 right-2 p-2 bg-slate-800 text-slate-400 rounded hover:text-white hover:bg-slate-700 transition-colors"
+                                className="absolute top-4 right-4 p-2 bg-slate-100 dark:bg-slate-900 text-slate-500 rounded-lg hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800"
                            >
                                {textCopied ? <Check size={16} /> : <Copy size={16} />}
                            </button>
                        )}
                    </div>
+                ) : foundFile.type === 'document' && decryptedUrl ? (
+                    <div className="w-full h-full p-4 flex flex-col items-center justify-center gap-6">
+                        {foundFile.mimeType === 'application/pdf' ? (
+                            <iframe src={decryptedUrl} className="w-full h-[60vh] rounded-lg border border-emerald-500/20 shadow-2xl bg-white" title="PDF Viewer" />
+                        ) : (
+                            <div className="text-center p-8 bg-emerald-500/10 dark:bg-emerald-900/10 rounded-2xl border border-emerald-500/20">
+                                <FileIcon size={64} className="text-emerald-500 mx-auto mb-4" />
+                                <p className="text-emerald-600 dark:text-emerald-400 font-bold mb-2">Documento Descifrado</p>
+                                <p className="text-emerald-600/60 dark:text-emerald-600/60 text-xs font-mono uppercase mb-4">No se puede previsualizar este formato</p>
+                            </div>
+                        )}
+                        <a 
+                            href={decryptedUrl} 
+                            download={`chronos-secure-file.${foundFile.mimeType.split('/')[1] || 'bin'}`}
+                            className="bg-emerald-500 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all hover:scale-105"
+                        >
+                            <Download size={20} /> DESCARGAR ARCHIVO
+                        </a>
+                    </div>
                 ) : decryptedUrl ? (
                   <div className="relative group cursor-zoom-in" onClick={() => isRevealed && burnStatus === 'pending' && setIsLightboxOpen(true)}>
                       <img 
                         src={decryptedUrl} 
                         alt="Content" 
-                        className="max-w-full max-h-[70vh] object-contain transition-transform group-hover:scale-[1.02]" 
+                        className="max-w-full max-h-[60vh] object-contain transition-transform duration-500 group-hover:scale-[1.02] drop-shadow-2xl rounded-sm" 
                       />
                       {isRevealed && burnStatus === 'pending' && (
-                        <div className="absolute bottom-4 right-4 bg-black/50 text-white p-2 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute bottom-4 right-4 bg-black/60 text-white p-2 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity border border-white/10">
                             <Maximize2 size={20} />
                         </div>
                       )}
@@ -457,18 +521,19 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                 {/* Fire Overlay for Animation */}
                 {burnStatus === 'burning' && (
                     <div className="absolute inset-0 z-30 flex items-end justify-center pointer-events-none">
-                         <div className="w-full h-full bg-orange-500/30 mix-blend-color-dodge animate-pulse absolute inset-0"></div>
-                         <div className="text-6xl animate-bounce mb-20">🔥</div>
+                         <div className="w-full h-full bg-orange-500/20 mix-blend-color-dodge animate-pulse absolute inset-0"></div>
                     </div>
                 )}
             </div>
             
             {/* Burnt State Message */}
             {burnStatus === 'burnt' && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center z-40 bg-black text-center animate-fade-in">
-                    <Flame size={64} className="text-orange-500 mb-4 animate-pulse" />
-                    <h3 className="text-2xl font-bold text-white mb-2">Archivo Incinerado</h3>
-                    <p className="text-slate-500">No quedan restos.</p>
+                <div className="absolute inset-0 flex flex-col items-center justify-center z-40 bg-slate-100 dark:bg-slate-950 text-center animate-fade-in">
+                    <div className="w-20 h-20 bg-slate-200 dark:bg-slate-900 rounded-full flex items-center justify-center mb-4 border border-slate-300 dark:border-slate-800">
+                        <Flame size={40} className="text-slate-500 dark:text-slate-700" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-500 mb-2 font-mono uppercase">Datos Eliminados</h3>
+                    <p className="text-slate-500/80 dark:text-slate-600 text-xs">El archivo ha dejado de existir.</p>
                 </div>
             )}
 
@@ -476,43 +541,35 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
             {!isRevealed && burnStatus === 'pending' && (
                 <div 
                     onClick={handleReveal}
-                    className="absolute inset-0 flex flex-col items-center justify-center z-10 cursor-pointer hover:bg-white/5 transition-colors"
+                    className="absolute inset-0 flex flex-col items-center justify-center z-10 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                 >
-                    <div className="bg-black/60 p-6 rounded-full border border-white/20 backdrop-blur-md mb-4 shadow-2xl">
-                        {foundFile.type === 'text' ? <FileText size={40} className="text-white"/> : 
-                         foundFile.type === 'audio' ? <Music size={40} className="text-white"/> :
-                         <Eye size={40} className="text-white" />}
+                    <div className="relative">
+                        <div className={`absolute inset-0 ${theme.bg} opacity-20 blur-xl rounded-full animate-pulse`}></div>
+                        <div className="bg-white/80 dark:bg-slate-900/80 p-8 rounded-full border border-slate-200 dark:border-white/10 backdrop-blur-md mb-6 shadow-2xl relative z-10 group-hover:scale-110 transition-transform duration-300">
+                            {foundFile.type === 'text' ? <FileText size={48} className="text-slate-800 dark:text-white"/> : 
+                            foundFile.type === 'audio' ? <Music size={48} className="text-slate-800 dark:text-white"/> :
+                            foundFile.type === 'document' ? <FileIcon size={48} className="text-slate-800 dark:text-white"/> :
+                            foundFile.type === 'video' ? <FileVideo size={48} className="text-slate-800 dark:text-white"/> :
+                            <Eye size={48} className="text-slate-800 dark:text-white" />}
+                        </div>
                     </div>
-                    <p className="text-white font-bold text-xl tracking-widest uppercase">Toca para revelar</p>
-                    <p className="text-slate-400 text-sm mt-1">
-                        {foundFile.type === 'text' ? 'Nota Secreta' : 
-                         foundFile.type === 'audio' ? 'Mensaje de Voz' : 'Archivo Multimedia'}
+                    <p className="text-slate-800 dark:text-white font-black text-2xl tracking-[0.3em] uppercase mb-2">Revelar</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-xs font-mono border border-slate-300 dark:border-slate-700 px-3 py-1 rounded-full bg-white/50 dark:bg-slate-950/50">
+                        {foundFile.type.toUpperCase()} • ENCRIPTADO
                     </p>
-                    {foundFile.options?.burnOnRead && (
-                        <p className="text-orange-400 text-sm mt-2 font-mono">⚠️ Se borrará al abrir</p>
-                    )}
                 </div>
             )}
           </div>
 
-          <div className="p-6 relative bg-slate-900">
-            <div className="flex items-center gap-2 text-slate-400 mb-2">
-              <Shield size={16} className={theme.color}/>
-              <span className={`text-sm uppercase tracking-wider font-semibold ${theme.color}`}>
-                Encriptado con Código
-              </span>
-            </div>
-            
-            {burnStatus === 'burnt' && (
-                <div className="bg-orange-500/20 border border-orange-500 p-3 rounded-lg text-orange-200 text-sm mb-4 flex gap-2">
-                    <Flame size={16} className="shrink-0" />
-                    <p>Este archivo ha sido eliminado del servidor permanentemente. Solo existe en tu memoria RAM ahora.</p>
+          <div className="p-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-white/5 flex justify-between items-center">
+            <p className="text-[10px] text-slate-500 dark:text-slate-600 font-mono break-all">
+                HASH: {foundFile.id.split('-')[0]}...{foundFile.id.split('-').pop()}
+            </p>
+             {burnStatus === 'burnt' && (
+                <div className="flex items-center gap-1 text-orange-500/50 text-[10px] uppercase font-bold">
+                    <Flame size={10} /> Purged
                 </div>
             )}
-            
-            <p className="text-xs text-slate-500 text-center font-mono break-all">
-                ID: {foundFile.id.split('-')[0]}...
-            </p>
           </div>
         </div>
       )}
@@ -520,11 +577,11 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
       {/* Lightbox / Fullscreen Modal */}
       {isLightboxOpen && decryptedUrl && foundFile?.type === 'image' && (
         <div 
-            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-fade-in backdrop-blur-md"
+            className="fixed inset-0 z-50 bg-slate-950/95 flex items-center justify-center p-4 animate-fade-in backdrop-blur-xl"
             onClick={() => setIsLightboxOpen(false)}
         >
             <button 
-                className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
                 onClick={() => setIsLightboxOpen(false)}
             >
                 <X size={24} />
@@ -532,13 +589,15 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
             <img 
                 src={decryptedUrl} 
                 alt="Fullscreen" 
-                className="max-w-full max-h-screen object-contain shadow-2xl"
+                className="max-w-full max-h-screen object-contain shadow-2xl rounded-md"
                 onClick={(e) => e.stopPropagation()} 
             />
             {foundFile.options?.burnOnRead && (
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-orange-600/90 px-4 py-2 rounded-full text-white font-bold flex items-center gap-2 animate-pulse">
-                    <Flame size={16} /> 
-                    {burnCountdown !== null ? `Destrucción en ${burnCountdown}s` : 'Auto-Destrucción Activa'}
+                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-slate-900/90 border border-orange-500/50 px-6 py-3 rounded-full text-white font-bold flex items-center gap-3 animate-pulse shadow-[0_0_30px_rgba(249,115,22,0.3)]">
+                    <Flame size={18} className="text-orange-500" /> 
+                    <span className="font-mono text-orange-100">
+                        {burnCountdown !== null ? `DESTRUCCIÓN: ${burnCountdown}s` : 'AUTO-DESTRUCCIÓN ACTIVA'}
+                    </span>
                 </div>
             )}
         </div>

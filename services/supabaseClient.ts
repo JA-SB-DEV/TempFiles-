@@ -13,3 +13,17 @@ export const isSupabaseConfigured = () => {
   // Consideramos que está configurado si tenemos las credenciales hardcodeadas o por variables de entorno
   return (!!process.env.SUPABASE_URL || !!supabaseUrl) && (!!process.env.SUPABASE_ANON_KEY || !!supabaseKey);
 };
+
+/**
+ * Verifica si un código ya existe en la base de datos.
+ * Retorna true si existe, false si está libre.
+ */
+export const checkCodeExists = async (code: string): Promise<boolean> => {
+  const { data, error } = await supabase
+    .from('temp_files')
+    .select('id')
+    .eq('code', code)
+    .maybeSingle();
+  
+  return !!data;
+};

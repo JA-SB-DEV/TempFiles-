@@ -1,39 +1,97 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chronos - Archivos Efímeros</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+            animation: {
+              'blob': 'blob 7s infinite',
+              'fade-in': 'fadeIn 0.5s ease-out',
+            },
+            keyframes: {
+              blob: {
+                '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                '100%': { transform: 'translate(0px, 0px) scale(1)' },
+              },
+              fadeIn: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
     <style>
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #0f172a;
+        /* Default transition for theme switch */
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+      
+      /* Dark mode specific pattern */
+      html.dark body {
+        background-color: #020617; /* Slate 950 */
         color: #e2e8f0;
-        overflow-x: hidden;
       }
-      .animate-fade-in {
-        animation: fadeIn 0.5s ease-out;
+
+      /* Light mode specific pattern */
+      html:not(.dark) body {
+        background-color: #f8fafc; /* Slate 50 */
+        color: #1e293b;
       }
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
+      
       .bg-grid-pattern {
+        background-size: 40px 40px;
+        mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+      }
+
+      html.dark .bg-grid-pattern {
         background-image: linear-gradient(to right, #1e293b 1px, transparent 1px),
                           linear-gradient(to bottom, #1e293b 1px, transparent 1px);
-        background-size: 40px 40px;
-        mask-image: radial-gradient(circle at center, black, transparent 80%);
       }
+
+      html:not(.dark) .bg-grid-pattern {
+        background-image: linear-gradient(to right, #cbd5e1 1px, transparent 1px),
+                          linear-gradient(to bottom, #cbd5e1 1px, transparent 1px);
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #94a3b8; 
+        border-radius: 3px;
+      }
+      html.dark ::-webkit-scrollbar-thumb {
+         background: #334155; 
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #64748b; 
+      }
+
       /* Spoiler Effect */
       .spoiler-blur {
-        filter: blur(20px) grayscale(50%);
-        transition: filter 0.5s ease, transform 0.5s ease;
-      }
-      .spoiler-blur:hover {
-        filter: blur(15px) grayscale(40%);
-        cursor: pointer;
+        filter: blur(24px) grayscale(80%);
+        transition: filter 0.7s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s ease;
       }
       .revealed {
         filter: blur(0);
@@ -56,20 +114,15 @@
           filter: contrast(2) brightness(0) sepia(1) hue-rotate(-50deg) saturate(5);
           mask-image: linear-gradient(to bottom, black 0%, transparent 0%);
           -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 0%);
-          transform: translateY(-20px) scale(0.95);
+          transform: translateY(-40px) scale(0.9);
         }
       }
 
       .burn-active {
-        animation: burn-up 2s forwards ease-in-out;
+        animation: burn-up 1.5s forwards ease-in-out;
         pointer-events: none;
       }
 
-      .ash-overlay {
-          background: radial-gradient(circle, rgba(255,100,0,0.2) 0%, rgba(0,0,0,0.8) 100%);
-          mix-blend-mode: hard-light;
-      }
-      
       /* Particles container */
       #particles {
         position: fixed;
@@ -77,7 +130,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        z-index: -1;
+        z-index: 0;
         pointer-events: none;
       }
     </style>
