@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TempFile } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
-import { decryptFile } from '../utils/crypto';
+import { decryptFile, hashString } from '../utils/crypto';
 import AudioPlayer from './AudioPlayer';
 import VideoPlayer from './VideoPlayer';
 import { Search, Clock, EyeOff, FileImage, FileVideo, AlertTriangle, Loader2, Database, Eye, Flame, Unlock, Shield, FileText, Copy, Check, Music, Lock, KeyRound, X, Maximize2, Terminal, Download, File as FileIcon } from 'lucide-react';
@@ -116,24 +116,27 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
     const targetCode = searchCode.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
 
     try {
-      // 1. Query Database
+      // 1. Hash the code for DB Lookup (Zero-Knowledge)
+      const targetHash = await hashString(targetCode);
+
+      // 2. Query Database using Hash
       const { data, error: dbError } = await supabase
         .from('temp_files')
         .select('*')
-        .eq('code', targetCode)
+        .eq('code', targetHash) // LOOKUP BY HASH
         .single();
 
       if (dbError || !data) {
         throw new Error("404: Archivo no encontrado o eliminado.");
       }
 
-      // 2. Check Expiration
+      // 3. Check Expiration
       const expiresAt = new Date(data.expires_at).getTime();
       if (Date.now() > expiresAt) {
         throw new Error("TTL Expired: Archivo autodestruido.");
       }
 
-      // 3. Get Download URL
+      // 4. Get Download URL
       const { data: signedUrlData, error: signedError } = await supabase.storage
         .from('chronos_files')
         .createSignedUrl(data.file_path, 60);
@@ -146,9 +149,11 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
       }
 
       // Basic file info before decryption
+      // Note: we store 'targetCode' (raw input) in the state 'code' property,
+      // because we need the raw code for decryption, not the hash.
       const fileInfo: TempFile = {
         id: data.id,
-        code: data.code,
+        code: targetCode, 
         fileUrl: signedUrlData.signedUrl,
         type: data.type as any,
         createdAt: new Date(data.created_at).getTime(),
@@ -165,7 +170,7 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
       setCachedFileInfo(fileInfo);
       setFoundFile(fileInfo); // Allows timer to start tick
 
-      // 4. Attempt Decryption (First attempt with just Code)
+      // 5. Attempt Decryption using raw targetCode (the Key)
       attemptDecryption(encryptedBlob, fileInfo, targetCode);
 
     } catch (err: any) {
@@ -487,7 +492,12 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                 ) : foundFile.type === 'document' && decryptedUrl ? (
                     <div className="w-full h-full p-4 flex flex-col items-center justify-center gap-6">
                         {foundFile.mimeType === 'application/pdf' ? (
-                            <iframe src={decryptedUrl} className="w-full h-[60vh] rounded-lg border border-emerald-500/20 shadow-2xl bg-white" title="PDF Viewer" />
+                            <object data={decryptedUrl} type="application/pdf" className="w-full h-[60vh] rounded-lg border border-emerald-500/20 shadow-2xl bg-white">
+                                <embed src={decryptedUrl} type="application/pdf" className="w-full h-[60vh] rounded-lg" />
+                                <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                                    <p>Tu navegador no puede visualizar este PDF directamente.</p>
+                                </div>
+                            </object>
                         ) : (
                             <div className="text-center p-8 bg-emerald-500/10 dark:bg-emerald-900/10 rounded-2xl border border-emerald-500/20">
                                 <FileIcon size={64} className="text-emerald-500 mx-auto mb-4" />

@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { TempFile } from '../types';
 import { supabase, isSupabaseConfigured, checkCodeExists } from '../services/supabaseClient';
-import { encryptFile } from '../utils/crypto';
-import { Camera, Video, Upload, Loader2, Database, Clock, Flame, Shield, X, FileText, Image as ImageIcon, Mic, StopCircle, Play, Trash2, Lock, ArrowRight, ShieldCheck, Eye, HardDrive, File as FileIcon, Paperclip } from 'lucide-react';
+import { encryptFile, hashString } from '../utils/crypto';
+import { Camera, Video, Upload, Loader2, Database, Clock, Flame, Shield, X, FileText, Image as ImageIcon, Mic, StopCircle, Play, Trash2, Lock, ArrowRight, ShieldCheck, Eye, HardDrive, File as FileIcon, Paperclip, Fingerprint } from 'lucide-react';
 
 interface UploadViewProps {
   onUploadSuccess: (file: TempFile) => void;
@@ -98,6 +98,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
   
   // Modal State
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showPrivacyInfo, setShowPrivacyInfo] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -220,9 +221,12 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
         let code = '';
         let attempts = 0;
 
+        // Ensure Uniqueness using HASHED code to prevent server from seeing raw code during check
         while (!unique && attempts < 10) {
             code = generateRandomCode();
-            const exists = await checkCodeExists(code);
+            // Hash the code before checking DB. Server sees Hash, not Code.
+            const codeHash = await hashString(code);
+            const exists = await checkCodeExists(codeHash);
             if (!exists) unique = true;
             attempts++;
         }
@@ -278,11 +282,16 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
             }
         );
 
+        // ZERO KNOWLEDGE ARCHITECTURE:
+        // Hash the code. We store the Hash in DB. We never store the Code.
+        // File path also uses the Hash to be obscure.
+        const codeHash = await hashString(code);
+
         setProgress(40);
         setStatusMessage('Subiendo a la nube...');
 
         const fileExt = 'enc';
-        const fileName = `${code}-${Date.now()}.${fileExt}`;
+        const fileName = `${codeHash}-${Date.now()}.${fileExt}`;
         const filePath = `${fileName}`;
 
         const interval = setInterval(() => {
@@ -321,7 +330,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
 
         const newFile: TempFile = {
             id: crypto.randomUUID(),
-            code: code,
+            code: code, // Keep raw code for UI display to user
             fileUrl: filePath,
             type: type,
             createdAt: now,
@@ -333,7 +342,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
             .from('temp_files')
             .insert([
             {
-                code: newFile.code,
+                code: codeHash, // STORE ONLY THE HASH
                 file_path: newFile.fileUrl,
                 type: newFile.type,
                 mime_type: 'application/encrypted',
@@ -424,9 +433,16 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                         <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-white/5">
                              <span className="text-slate-500 text-[10px] font-bold uppercase block mb-1">Auto-Destrucción</span>
                              <span className={`text-sm font-semibold flex items-center gap-1 ${burnOnRead ? 'text-orange-500 dark:text-orange-400' : 'text-slate-400'}`}>
-                                <Flame size={14} /> {burnOnRead ? 'Si' : 'No'}
+                                <Flame size={14} /> {burnOnRead ? `${burnDelay}s` : 'No'}
                             </span>
                         </div>
+                    </div>
+
+                    <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl text-xs text-blue-600 dark:text-blue-300 flex gap-2">
+                        <Fingerprint size={16} className="shrink-0 mt-0.5" />
+                        <p>
+                            <strong>Zero-Knowledge:</strong> El servidor solo guardará un <em>Hash matemático</em> de tu código. Es imposible que el administrador lea tu archivo.
+                        </p>
                     </div>
                 </div>
 
@@ -717,24 +733,46 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                         </div>
 
                         {/* Burn On Read */}
-                        <button 
-                            onClick={() => !isProcessing && setBurnOnRead(!burnOnRead)}
-                            className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
+                        <div className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
                                 burnOnRead 
                                 ? 'bg-orange-500/10 border-orange-500/50' 
-                                : 'bg-slate-100 dark:bg-slate-950 border-slate-300 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
+                                : 'bg-slate-100 dark:bg-slate-950 border-slate-300 dark:border-slate-800'
                             }`}
                         >
-                            <label className={`text-xs font-bold flex items-center gap-1.5 ${burnOnRead ? 'text-orange-500 dark:text-orange-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                                <Flame size={12} /> Auto-Destruir
-                            </label>
-                            <div className="flex justify-between items-center mt-2 w-full">
-                                <span className="text-[10px] text-slate-500">{burnOnRead ? 'Activado' : 'Desactivado'}</span>
-                                <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${burnOnRead ? 'bg-orange-500' : 'bg-slate-400 dark:bg-slate-700'}`}>
-                                    <div className={`bg-white w-3 h-3 rounded-full shadow-sm transform transition-transform ${burnOnRead ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                            <div 
+                                className="cursor-pointer"
+                                onClick={() => !isProcessing && setBurnOnRead(!burnOnRead)}
+                            >
+                                <label className={`text-xs font-bold flex items-center gap-1.5 cursor-pointer ${burnOnRead ? 'text-orange-500 dark:text-orange-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                                    <Flame size={12} /> Auto-Destruir
+                                </label>
+                                <div className="flex justify-between items-center mt-2 w-full">
+                                    <span className="text-[10px] text-slate-500">{burnOnRead ? 'Activado' : 'Desactivado'}</span>
+                                    <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${burnOnRead ? 'bg-orange-500' : 'bg-slate-400 dark:bg-slate-700'}`}>
+                                        <div className={`bg-white w-3 h-3 rounded-full shadow-sm transform transition-transform ${burnOnRead ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                    </div>
                                 </div>
                             </div>
-                        </button>
+                            
+                            {/* Burn Delay Slider */}
+                            {burnOnRead && (
+                                <div className="mt-3 pt-2 border-t border-slate-300 dark:border-white/10 animate-fade-in">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[9px] text-slate-500 font-bold uppercase">Lectura</span>
+                                        <span className="text-[9px] text-orange-500 font-mono font-bold">{burnDelay}s</span>
+                                    </div>
+                                    <input 
+                                        type="range" 
+                                        min="5" 
+                                        max="60" 
+                                        step="5"
+                                        value={burnDelay}
+                                        onChange={(e) => setBurnDelay(Number(e.target.value))}
+                                        className="w-full h-1 bg-slate-300 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-orange-500 [&::-webkit-slider-thumb]:rounded-full"
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Password */}

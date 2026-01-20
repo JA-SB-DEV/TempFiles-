@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import UploadView from './components/UploadView';
 import RetrieveView from './components/RetrieveView';
+import SystemAudit from './components/SystemAudit';
 import { TempFile } from './types';
-import { Hourglass, ShieldCheck, Copy, CheckCircle2, QrCode, ArrowLeft, Zap, Github, Repeat, Link as LinkIcon, Eye, ExternalLink, Infinity, Sun, Moon } from 'lucide-react';
+import { Hourglass, ShieldCheck, Copy, CheckCircle2, QrCode, ArrowLeft, Zap, Github, Repeat, Link as LinkIcon, Eye, ExternalLink, Infinity, Sun, Moon, Activity } from 'lucide-react';
 
 // --- Particle System Types ---
 interface Particle {
@@ -22,6 +23,7 @@ export default function App() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [linkCopySuccess, setLinkCopySuccess] = useState(false);
   const [externalCode, setExternalCode] = useState<string>('');
+  const [showAudit, setShowAudit] = useState(false);
   
   // Theme State
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -50,16 +52,31 @@ export default function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  // --- Check URL Params on Load ---
+  // --- Check URL Params (and Fragments) on Load ---
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const codeParam = params.get('code');
-    if (codeParam) {
-      setExternalCode(codeParam);
+    // Priority: Check Fragment (Hash) first for privacy-first sharing
+    // e.g. domain.com/#code=ABC-123
+    let code = '';
+    
+    if (window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const hashCode = hashParams.get('code');
+        if (hashCode) code = hashCode;
+    }
+
+    // Fallback: Check Query Params (Legacy support)
+    if (!code) {
+        const params = new URLSearchParams(window.location.search);
+        const queryCode = params.get('code');
+        if (queryCode) code = queryCode;
+    }
+
+    if (code) {
+      setExternalCode(code);
       setView('retrieve');
-      
-      // Clean URL without reloading
-      window.history.replaceState({}, document.title, window.location.pathname);
+      // Clean URL without reloading to hide code from visual inspection if desired, 
+      // though typically keeping it there allows refresh. 
+      // For privacy from browser history, we can't do much, but the Fragment prevents Server Logs.
     }
   }, []);
 
@@ -134,23 +151,16 @@ export default function App() {
     if (uploadedFile) {
       const generateQR = async () => {
         try {
-          let colorDark = '#000000'; // QR default
-          let colorLight = '#00000000';
+          // Use Hash-based URL for sharing (Privacy friendly)
+          const shareUrl = `${window.location.origin}/#code=${uploadedFile.code}`;
 
-          // Ensure high contrast for QR
-          if (uploadedFile.type === 'image') colorDark = '#06b6d4'; // Cyan
-          else if (uploadedFile.type === 'audio') colorDark = '#db2777'; // Pink
-          else if (uploadedFile.type === 'video') colorDark = '#7c3aed'; // Violet
-          else if (uploadedFile.type === 'text') colorDark = '#d97706'; // Amber
-
-          const shareUrl = `${window.location.origin}?code=${uploadedFile.code}`;
-
+          // Always use high contrast black on white/transparent for logic, but we render on white bg
           const url = await QRCode.toDataURL(shareUrl, {
             width: 400,
             margin: 2,
             color: {
-              dark: colorDark,
-              light: colorLight
+              dark: '#000000',
+              light: '#00000000'
             }
           });
           setQrCodeUrl(url);
@@ -177,7 +187,8 @@ export default function App() {
 
   const handleCopyLink = () => {
     if (uploadedFile) {
-        const link = `${window.location.origin}?code=${uploadedFile.code}`;
+        // Use Hash-based URL
+        const link = `${window.location.origin}/#code=${uploadedFile.code}`;
         navigator.clipboard.writeText(link);
         setLinkCopySuccess(true);
         setTimeout(() => setLinkCopySuccess(false), 2000);
@@ -226,7 +237,16 @@ export default function App() {
                 </div>
             </div>
             
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+                {/* Audit Button (New Location) */}
+                <button 
+                    onClick={() => setShowAudit(true)}
+                    className="p-2.5 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 shadow-md border border-slate-200 dark:border-slate-700 hover:scale-105 transition-transform hover:text-cyan-500 dark:hover:text-cyan-400"
+                    title="Auditoría del Sistema"
+                >
+                    <Activity size={18} />
+                </button>
+
                 {/* Theme Toggle */}
                 <button 
                     onClick={toggleTheme}
@@ -237,7 +257,7 @@ export default function App() {
                 </button>
 
                 {!uploadedFile && (
-                    <nav className="flex p-1 bg-white/50 dark:bg-slate-900/60 rounded-full border border-slate-200 dark:border-slate-700/50 backdrop-blur-md shadow-lg">
+                    <nav className="flex p-1 bg-white/50 dark:bg-slate-900/60 rounded-full border border-slate-200 dark:border-slate-700/50 backdrop-blur-md shadow-lg ml-2">
                         <button 
                             onClick={() => setView('upload')}
                             className={`px-6 py-2 rounded-full text-sm font-bold transition-all duration-300 ${view === 'upload' ? 'bg-cyan-500 text-white dark:text-slate-950 shadow-[0_0_20px_rgba(6,182,212,0.3)]' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'}`}
@@ -303,8 +323,9 @@ export default function App() {
                         {/* QR Code */}
                         {qrCodeUrl && (
                             <div className="flex justify-center mb-8 relative group/qr">
+                                {/* Removed dark mode blend/invert classes to keep QR always black on white for reliability */}
                                 <div className="p-3 bg-white rounded-2xl shadow-xl transform transition-all group-hover/qr:scale-105 group-hover/qr:shadow-2xl ring-4 ring-slate-200 dark:ring-cyan-500/20 border border-slate-100 dark:border-transparent">
-                                    <img src={qrCodeUrl} alt="QR Access Code" className="w-40 h-40 mix-blend-normal dark:mix-blend-screen dark:invert" />
+                                    <img src={qrCodeUrl} alt="QR Access Code" className="w-40 h-40" />
                                 </div>
                             </div>
                         )}
@@ -340,8 +361,11 @@ export default function App() {
 
         </main>
 
+        {/* Audit Modal */}
+        {showAudit && <SystemAudit onClose={() => setShowAudit(false)} />}
+
         {/* Footer */}
-        <footer className="p-6 text-center text-slate-500 dark:text-slate-600 text-[10px] font-mono uppercase tracking-widest">
+        <footer className="p-6 text-center flex flex-col md:flex-row items-center justify-center gap-4 text-slate-500 dark:text-slate-600 text-[10px] font-mono uppercase tracking-widest relative z-20">
             <p className="flex items-center justify-center gap-2 opacity-50 hover:opacity-100 transition-opacity">
                 <Zap size={12} /> Secure Storage by Supabase
             </p>

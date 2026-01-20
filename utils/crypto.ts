@@ -1,5 +1,15 @@
 // Utility for Client-Side Encryption (AES-GCM) based on the File Code
 
+// Helper: Create a SHA-256 hash string (hex) from a string
+// Used for Database Indexing without revealing the actual Key
+export const hashString = async (message: string): Promise<string> => {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+};
+
 // Derive a CryptoKey directly from the simple code string (e.g., "GATO-ROJO")
 export const getKeyFromCode = async (code: string): Promise<CryptoKey> => {
   const encoder = new TextEncoder();
