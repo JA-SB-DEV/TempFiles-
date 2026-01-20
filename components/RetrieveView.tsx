@@ -4,7 +4,7 @@ import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { decryptFile, hashString } from '../utils/crypto';
 import AudioPlayer from './AudioPlayer';
 import VideoPlayer from './VideoPlayer';
-import { Search, Clock, EyeOff, FileImage, FileVideo, AlertTriangle, Loader2, Database, Eye, Flame, Unlock, Shield, FileText, Copy, Check, Music, Lock, KeyRound, X, Maximize2, Terminal, Download, File as FileIcon } from 'lucide-react';
+import { Search, Clock, EyeOff, FileImage, FileVideo, AlertTriangle, Loader2, Database, Eye, Flame, Unlock, Shield, FileText, Copy, Check, Music, Lock, KeyRound, X, Maximize2, Terminal, Download, File as FileIcon, Package, Layers } from 'lucide-react';
 
 interface RetrieveViewProps {
   initialCode?: string;
@@ -12,6 +12,16 @@ interface RetrieveViewProps {
 
 // Theme Helper for Retrieval
 const getRetrieveTheme = (type?: string) => {
+    if (type === 'archive') {
+         return {
+            color: 'text-indigo-600 dark:text-indigo-400',
+            border: 'border-indigo-500/50',
+            bg: 'bg-indigo-600',
+            gradient: 'from-indigo-500 to-purple-600',
+            btnBg: 'bg-indigo-600 hover:bg-indigo-500', 
+            ring: 'focus:border-indigo-500'
+        };
+    }
     if (type === 'text') {
         return {
             color: 'text-amber-600 dark:text-amber-400',
@@ -196,6 +206,7 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                    mimeType.includes('msword') || 
                    mimeType.includes('sheet') ||
                    mimeType.includes('presentation')) fileType = 'document';
+          else if (mimeType === 'application/zip') fileType = 'archive';
 
           if (mimeType === 'text/plain') {
             const text = await decryptedBlob.text();
@@ -489,7 +500,7 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                            </button>
                        )}
                    </div>
-                ) : foundFile.type === 'document' && decryptedUrl ? (
+                ) : (foundFile.type === 'document' || foundFile.type === 'archive') && decryptedUrl ? (
                     <div className="w-full h-full p-4 flex flex-col items-center justify-center gap-6">
                         {foundFile.mimeType === 'application/pdf' ? (
                             <object data={decryptedUrl} type="application/pdf" className="w-full h-[60vh] rounded-lg border border-emerald-500/20 shadow-2xl bg-white">
@@ -499,18 +510,33 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                                 </div>
                             </object>
                         ) : (
-                            <div className="text-center p-8 bg-emerald-500/10 dark:bg-emerald-900/10 rounded-2xl border border-emerald-500/20">
-                                <FileIcon size={64} className="text-emerald-500 mx-auto mb-4" />
-                                <p className="text-emerald-600 dark:text-emerald-400 font-bold mb-2">Documento Descifrado</p>
-                                <p className="text-emerald-600/60 dark:text-emerald-600/60 text-xs font-mono uppercase mb-4">No se puede previsualizar este formato</p>
+                            <div className={`text-center p-8 rounded-2xl border flex flex-col items-center ${
+                                foundFile.type === 'archive' 
+                                ? 'bg-indigo-500/10 dark:bg-indigo-900/10 border-indigo-500/20' 
+                                : 'bg-emerald-500/10 dark:bg-emerald-900/10 border-emerald-500/20'
+                            }`}>
+                                {foundFile.type === 'archive' ? (
+                                    <Package size={64} className="text-indigo-500 mx-auto mb-4" />
+                                ) : (
+                                    <FileIcon size={64} className="text-emerald-500 mx-auto mb-4" />
+                                )}
+                                
+                                <p className={`font-bold mb-2 ${foundFile.type === 'archive' ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                    {foundFile.type === 'archive' ? 'Paquete Comprimido' : 'Documento Descifrado'}
+                                </p>
+                                <p className={`text-xs font-mono uppercase mb-4 opacity-60 ${foundFile.type === 'archive' ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                    {foundFile.mimeType}
+                                </p>
                             </div>
                         )}
                         <a 
                             href={decryptedUrl} 
-                            download={`chronos-secure-file.${foundFile.mimeType.split('/')[1] || 'bin'}`}
-                            className="bg-emerald-500 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all hover:scale-105"
+                            download={`chronos-secure-${foundFile.type === 'archive' ? 'pack.zip' : `file.${foundFile.mimeType.split('/')[1] || 'bin'}`}`}
+                            className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all hover:scale-105 text-white ${
+                                foundFile.type === 'archive' ? 'bg-indigo-500 hover:bg-indigo-600' : 'bg-emerald-500 hover:bg-emerald-600'
+                            }`}
                         >
-                            <Download size={20} /> DESCARGAR ARCHIVO
+                            <Download size={20} /> DESCARGAR {foundFile.type === 'archive' ? 'ZIP' : 'ARCHIVO'}
                         </a>
                     </div>
                 ) : decryptedUrl ? (
@@ -560,6 +586,7 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                             foundFile.type === 'audio' ? <Music size={48} className="text-slate-800 dark:text-white"/> :
                             foundFile.type === 'document' ? <FileIcon size={48} className="text-slate-800 dark:text-white"/> :
                             foundFile.type === 'video' ? <FileVideo size={48} className="text-slate-800 dark:text-white"/> :
+                            foundFile.type === 'archive' ? <Package size={48} className="text-slate-800 dark:text-white"/> :
                             <Eye size={48} className="text-slate-800 dark:text-white" />}
                         </div>
                     </div>

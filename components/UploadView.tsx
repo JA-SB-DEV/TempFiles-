@@ -2,7 +2,8 @@ import React, { useState, useRef, useCallback } from 'react';
 import { TempFile } from '../types';
 import { supabase, isSupabaseConfigured, checkCodeExists } from '../services/supabaseClient';
 import { encryptFile, hashString } from '../utils/crypto';
-import { Camera, Video, Upload, Loader2, Database, Clock, Flame, Shield, X, FileText, Image as ImageIcon, Mic, StopCircle, Play, Trash2, Lock, ArrowRight, ShieldCheck, Eye, HardDrive, File as FileIcon, Paperclip, Fingerprint } from 'lucide-react';
+import JSZip from 'jszip';
+import { Camera, Video, Upload, Loader2, Database, Clock, Flame, Shield, X, FileText, Image as ImageIcon, Mic, StopCircle, Play, Trash2, Lock, ArrowRight, ShieldCheck, Eye, HardDrive, File as FileIcon, Paperclip, Fingerprint, Package, Layers } from 'lucide-react';
 
 interface UploadViewProps {
   onUploadSuccess: (file: TempFile) => void;
@@ -11,7 +12,18 @@ interface UploadViewProps {
 type UploadMode = 'file' | 'text' | 'audio' | 'document';
 
 // Theme Helpers
-const getTheme = (mode: UploadMode, fileType?: string) => {
+const getTheme = (mode: UploadMode, fileType?: string, isArchive?: boolean) => {
+    if (isArchive) {
+         return {
+            color: 'text-indigo-600 dark:text-indigo-400',
+            border: 'border-indigo-500/50',
+            focusRing: 'focus:ring-indigo-500',
+            bg: 'bg-indigo-600',
+            gradient: 'from-indigo-500 to-purple-600',
+            shadow: 'shadow-[0_0_30px_rgba(99,102,241,0.2)]',
+            accent: 'text-purple-500 dark:text-purple-400'
+        };
+    }
     if (mode === 'text') {
         return {
             color: 'text-amber-600 dark:text-amber-400',
@@ -70,7 +82,7 @@ const getTheme = (mode: UploadMode, fileType?: string) => {
 
 const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
   const [mode, setMode] = useState<UploadMode>('file');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [textContent, setTextContent] = useState('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -103,24 +115,39 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Dynamic Theme
-  const theme = getTheme(mode, selectedFile?.type);
+  const isArchive = selectedFiles.length > 1;
+  const theme = getTheme(mode, selectedFiles[0]?.type, isArchive);
 
-  const processFile = (file: File) => {
-    if (file.size > 50 * 1024 * 1024) { // 50MB
-      alert("El archivo es demasiado grande (Máx 50MB)");
+  const processFiles = (files: FileList | File[]) => {
+    const validFiles: File[] = [];
+    let totalSize = 0;
+
+    for (let i = 0; i < files.length; i++) {
+        totalSize += files[i].size;
+        validFiles.push(files[i]);
+    }
+
+    if (totalSize > 50 * 1024 * 1024) { // 50MB Total Limit
+      alert("El tamaño total excede el límite (Máx 50MB)");
       return;
     }
-    setSelectedFile(file);
-    if (mode === 'document') {
-        // No preview URL needed for generic docs unless it's an image disguised
-        setPreviewUrl(null); 
+
+    setSelectedFiles(validFiles);
+
+    // Only set preview if it's a single file and an image/video
+    if (validFiles.length === 1) {
+        if (mode === 'document') {
+             setPreviewUrl(null);
+        } else {
+             setPreviewUrl(URL.createObjectURL(validFiles[0]));
+        }
     } else {
-        setPreviewUrl(URL.createObjectURL(file));
+        setPreviewUrl(null);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) processFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) processFiles(e.target.files);
   };
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -137,8 +164,8 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFiles(e.dataTransfer.files);
     }
   }, []);
 
@@ -159,7 +186,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const audioFile = new File([audioBlob], "recording.webm", { type: 'audio/webm' });
-        processFile(audioFile);
+        processFiles([audioFile]);
         
         // Stop all tracks to release microphone
         stream.getTracks().forEach(track => track.stop());
@@ -204,10 +231,10 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
   };
 
   const handleInitialSubmit = async () => {
-    if (mode === 'file' && (!selectedFile || !previewUrl)) return;
+    if (mode === 'file' && selectedFiles.length === 0) return;
     if (mode === 'text' && !textContent.trim()) return;
-    if (mode === 'audio' && !selectedFile) return;
-    if (mode === 'document' && !selectedFile) return;
+    if (mode === 'audio' && selectedFiles.length === 0) return;
+    if (mode === 'document' && selectedFiles.length === 0) return;
 
     if (!isSupabaseConfigured()) {
       alert("Error: Supabase no está configurado.");
@@ -256,14 +283,29 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
 
     try {
         let fileToEncrypt: File;
+
         if (mode === 'text') {
             const blob = new Blob([textContent], { type: 'text/plain' });
             fileToEncrypt = new File([blob], 'secret_note.txt', { type: 'text/plain' });
+        } else if (selectedFiles.length > 1) {
+            // MULTIPLE FILES: Create ZIP
+            setStatusMessage('Comprimiendo (ZIP)...');
+            setProgress(5);
+            
+            const zip = new JSZip();
+            selectedFiles.forEach(file => {
+                zip.file(file.name, file);
+            });
+            
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            fileToEncrypt = new File([zipBlob], 'archive.zip', { type: 'application/zip' });
+            
         } else {
-            fileToEncrypt = selectedFile!;
+            // SINGLE FILE
+            fileToEncrypt = selectedFiles[0]!;
         }
     
-        setProgress(10);
+        setProgress(15);
         setStatusMessage('Generando llaves...');
         const code = generatedCode || generateRandomCode();
       
@@ -282,9 +324,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
             }
         );
 
-        // ZERO KNOWLEDGE ARCHITECTURE:
-        // Hash the code. We store the Hash in DB. We never store the Code.
-        // File path also uses the Hash to be obscure.
+        // ZERO KNOWLEDGE ARCHITECTURE
         const codeHash = await hashString(code);
 
         setProgress(40);
@@ -322,8 +362,10 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
         const now = Date.now();
         const expiresAt = now + expiresInMs;
         
+        // Determine DB Type
         let type: TempFile['type'] = 'image';
         if (mode === 'text') type = 'text';
+        else if (selectedFiles.length > 1) type = 'archive';
         else if (mode === 'audio' || fileToEncrypt.type.startsWith('audio/')) type = 'audio';
         else if (fileToEncrypt.type.startsWith('video/')) type = 'video';
         else if (mode === 'document') type = 'document';
@@ -366,7 +408,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
   };
 
   const removeFile = () => {
-    setSelectedFile(null);
+    setSelectedFiles([]);
     setPreviewUrl(null);
     setProgress(0);
     setStatusMessage('');
@@ -438,10 +480,17 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                         </div>
                     </div>
 
+                    {isArchive && (
+                        <div className="bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-xl text-xs text-indigo-600 dark:text-indigo-300 flex items-center gap-2">
+                             <Layers size={16} />
+                             <p>Se creará un archivo <strong>ZIP</strong> con <strong>{selectedFiles.length}</strong> elementos.</p>
+                        </div>
+                    )}
+
                     <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl text-xs text-blue-600 dark:text-blue-300 flex gap-2">
                         <Fingerprint size={16} className="shrink-0 mt-0.5" />
                         <p>
-                            <strong>Zero-Knowledge:</strong> El servidor solo guardará un <em>Hash matemático</em> de tu código. Es imposible que el administrador lea tu archivo.
+                            <strong>Zero-Knowledge:</strong> El servidor solo guardará un <em>Hash matemático</em> de tu código.
                         </p>
                     </div>
                 </div>
@@ -527,7 +576,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                 <div className="min-h-[260px]">
                     {/* FILE UPLOAD MODE */}
                     {mode === 'file' && (
-                        !selectedFile ? (
+                        selectedFiles.length === 0 ? (
                             <div 
                             onDragEnter={handleDrag}
                             onDragLeave={handleDrag}
@@ -545,19 +594,36 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                                 </div>
                                 <p className="text-slate-600 dark:text-slate-300 font-bold text-lg group-hover:text-slate-800 dark:group-hover:text-white transition-colors">Toca o Arrastra</p>
                                 <p className="text-slate-500 mt-2 text-xs text-center font-mono uppercase tracking-wide">
-                                    Imágenes • Videos
+                                    Imágenes • Videos • Múltiples
                                 </p>
                                 <input 
                                     ref={fileInputRef}
                                     type="file" 
                                     accept="image/*,video/*" 
+                                    multiple
                                     className="hidden" 
                                     onChange={handleFileChange}
                                 />
                             </div>
                         ) : (
-                            <div className="relative h-[260px] rounded-3xl overflow-hidden bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 group">
-                                {selectedFile.type.startsWith('video/') ? (
+                            <div className="relative h-[260px] rounded-3xl overflow-hidden bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 group flex items-center justify-center">
+                                {selectedFiles.length > 1 ? (
+                                    // STACK PREVIEW FOR MULTIPLE FILES
+                                    <div className="flex flex-col items-center">
+                                         <div className="relative mb-4">
+                                            <div className="absolute top-0 left-0 w-24 h-24 bg-indigo-500/20 rounded-2xl border border-indigo-500/30 transform -rotate-6 translate-x-2"></div>
+                                            <div className="absolute top-0 left-0 w-24 h-24 bg-indigo-500/40 rounded-2xl border border-indigo-500/30 transform rotate-6 -translate-x-2"></div>
+                                            <div className="relative w-24 h-24 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl border border-indigo-400 z-10">
+                                                <Layers size={40} className="text-white" />
+                                                <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
+                                                    {selectedFiles.length}
+                                                </div>
+                                            </div>
+                                         </div>
+                                         <p className="font-bold text-indigo-600 dark:text-indigo-400">{selectedFiles.length} Archivos</p>
+                                         <p className="text-xs text-slate-500 mt-1">Se comprimirán en un ZIP</p>
+                                    </div>
+                                ) : selectedFiles[0].type.startsWith('video/') ? (
                                     <video src={previewUrl!} className="w-full h-full object-contain bg-black" />
                                 ) : (
                                     <img src={previewUrl!} alt="Preview" className="w-full h-full object-contain bg-black" />
@@ -576,7 +642,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
 
                     {/* DOCUMENT MODE */}
                     {mode === 'document' && (
-                        !selectedFile ? (
+                        selectedFiles.length === 0 ? (
                             <div 
                             onDragEnter={handleDrag}
                             onDragLeave={handleDrag}
@@ -594,23 +660,42 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                                 </div>
                                 <p className="text-slate-600 dark:text-slate-300 font-bold text-lg group-hover:text-slate-800 dark:group-hover:text-white transition-colors">Subir Documento</p>
                                 <p className="text-slate-500 mt-2 text-xs text-center font-mono uppercase tracking-wide">
-                                    PDF • DOCX • TXT
+                                    PDF • DOCX • TXT • Múltiples
                                 </p>
                                 <input 
                                     ref={fileInputRef}
                                     type="file" 
                                     accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx" 
+                                    multiple
                                     className="hidden" 
                                     onChange={handleFileChange}
                                 />
                             </div>
                         ) : (
                             <div className="relative h-[260px] rounded-3xl overflow-hidden bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 group flex flex-col items-center justify-center">
-                                <div className="w-24 h-24 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-4 border border-emerald-500/20">
-                                    <FileIcon size={48} className="text-emerald-600 dark:text-emerald-400" />
-                                </div>
-                                <p className="text-emerald-600 dark:text-emerald-300 font-bold max-w-[80%] truncate">{selectedFile.name}</p>
-                                <p className="text-emerald-600/60 dark:text-emerald-500/50 text-xs font-mono mt-1">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                {selectedFiles.length > 1 ? (
+                                     <div className="flex flex-col items-center">
+                                        <div className="relative mb-4">
+                                            <div className="absolute top-0 left-0 w-24 h-24 bg-indigo-500/20 rounded-2xl border border-indigo-500/30 transform -rotate-3 translate-x-1"></div>
+                                            <div className="relative w-24 h-24 bg-indigo-600/10 rounded-2xl flex items-center justify-center shadow-xl border border-indigo-500/50 z-10">
+                                                <Layers size={40} className="text-indigo-600 dark:text-indigo-400" />
+                                                <div className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
+                                                    {selectedFiles.length}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p className="font-bold text-indigo-600 dark:text-indigo-400">{selectedFiles.length} Documentos</p>
+                                        <p className="text-xs text-slate-500 mt-1 font-mono">{(selectedFiles.reduce((acc, f) => acc + f.size, 0) / 1024 / 1024).toFixed(2)} MB Total</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="w-24 h-24 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-4 border border-emerald-500/20">
+                                            <FileIcon size={48} className="text-emerald-600 dark:text-emerald-400" />
+                                        </div>
+                                        <p className="text-emerald-600 dark:text-emerald-300 font-bold max-w-[80%] truncate">{selectedFiles[0].name}</p>
+                                        <p className="text-emerald-600/60 dark:text-emerald-500/50 text-xs font-mono mt-1">{(selectedFiles[0].size / 1024 / 1024).toFixed(2)} MB</p>
+                                    </>
+                                )}
                                 
                                 <button 
                                     onClick={removeFile}
@@ -627,7 +712,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                     {mode === 'audio' && (
                         <div className="h-[260px] rounded-3xl bg-slate-100/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden">
                             
-                            {!selectedFile && !isRecording && (
+                            {selectedFiles.length === 0 && !isRecording && (
                                 <div className="text-center animate-fade-in">
                                     <button 
                                         onClick={startRecording}
@@ -670,7 +755,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                                 </>
                             )}
 
-                            {selectedFile && !isRecording && (
+                            {selectedFiles.length > 0 && !isRecording && (
                                 <div className="w-full px-6 animate-fade-in">
                                     <div className="bg-slate-200 dark:bg-slate-950 p-4 rounded-2xl border border-pink-500/30 mb-4 flex items-center justify-between">
                                         <div className="flex items-center gap-4">
@@ -679,14 +764,14 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                                             </div>
                                             <div>
                                                 <p className="text-slate-800 dark:text-white text-sm font-bold">Nota de Voz</p>
-                                                <p className="text-pink-600/60 dark:text-pink-400/60 text-xs font-mono">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                                                <p className="text-pink-600/60 dark:text-pink-400/60 text-xs font-mono">{(selectedFiles[0].size / 1024).toFixed(1)} KB</p>
                                             </div>
                                         </div>
                                         <button onClick={removeFile} className="text-slate-500 hover:text-red-500 transition-colors p-2">
                                             <Trash2 size={20} />
                                         </button>
                                     </div>
-                                    <audio controls src={previewUrl!} className="w-full h-10 opacity-60 hover:opacity-100 transition-opacity" />
+                                    {previewUrl && <audio controls src={previewUrl!} className="w-full h-10 opacity-60 hover:opacity-100 transition-opacity" />}
                                 </div>
                             )}
                             
@@ -806,9 +891,9 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                 {/* Main Action */}
                 <button
                     onClick={handleInitialSubmit}
-                    disabled={isProcessing || isGeneratingCode || !isSupabaseConfigured() || (mode === 'file' && !selectedFile) || (mode === 'text' && !textContent.trim()) || (mode === 'audio' && !selectedFile) || (mode === 'document' && !selectedFile)}
+                    disabled={isProcessing || isGeneratingCode || !isSupabaseConfigured() || (mode === 'file' && selectedFiles.length === 0) || (mode === 'text' && !textContent.trim()) || (mode === 'audio' && selectedFiles.length === 0) || (mode === 'document' && selectedFiles.length === 0)}
                     className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-lg relative overflow-hidden group ${
-                        isProcessing || isGeneratingCode || (mode === 'file' && !selectedFile) || (mode === 'text' && !textContent.trim()) || (mode === 'audio' && !selectedFile) || (mode === 'document' && !selectedFile)
+                        isProcessing || isGeneratingCode || (mode === 'file' && selectedFiles.length === 0) || (mode === 'text' && !textContent.trim()) || (mode === 'audio' && selectedFiles.length === 0) || (mode === 'document' && selectedFiles.length === 0)
                         ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50' 
                         : `bg-gradient-to-r ${theme.gradient} text-white ${theme.shadow} hover:brightness-110 hover:-translate-y-0.5`
                     }`}

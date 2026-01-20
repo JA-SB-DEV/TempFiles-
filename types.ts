@@ -2,7 +2,7 @@ export interface TempFile {
   id: string;
   code: string;
   fileUrl: string;
-  type: 'image' | 'video' | 'text' | 'audio' | 'document';
+  type: 'image' | 'video' | 'text' | 'audio' | 'document' | 'archive';
   createdAt: number;
   expiresAt: number;
   mimeType: string;
