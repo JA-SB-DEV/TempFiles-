@@ -16,9 +16,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       rollupOptions: {
-        // Externalize jszip so Rollup doesn't fail if it's missing in node_modules,
-        // relying on index.html importmap to provide it at runtime.
-        external: ['jszip'], 
+        // Removed external: ['jszip'] to let Vite bundle it
       }
     }
   };
