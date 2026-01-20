@@ -94,7 +94,7 @@ const GlobalStats: React.FC<GlobalStatsProps> = ({ onClose }) => {
                             </span>
                         )}
                         <span className="text-emerald-500 text-xs font-bold flex items-center gap-1 animate-pulse">
-                            <Activity size={10} /> LIVE
+                            <Activity size={10} /> EN VIVO
                         </span>
                     </div>
                 </div>
@@ -106,7 +106,7 @@ const GlobalStats: React.FC<GlobalStatsProps> = ({ onClose }) => {
                     </div>
                     <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Protocolo</p>
                     <p className="text-xl font-bold text-slate-800 dark:text-slate-200 font-mono">AES-GCM</p>
-                    <p className="text-xs text-cyan-600 dark:text-cyan-400 font-bold mt-1">256-BIT • CLIENT-SIDE</p>
+                    <p className="text-xs text-cyan-600 dark:text-cyan-400 font-bold mt-1">256-BIT • LADO CLIENTE</p>
                 </div>
 
                  {/* Server Status */}
@@ -117,7 +117,7 @@ const GlobalStats: React.FC<GlobalStatsProps> = ({ onClose }) => {
                     <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Tiempo de Actividad</p>
                     <p className="text-xl font-bold text-slate-800 dark:text-slate-200 font-mono">{uptime}</p>
                     <p className="text-xs text-emerald-500 font-bold mt-1 flex items-center gap-1">
-                        <Globe size={10} /> SYSTEM OPTIMAL
+                        <Globe size={10} /> SISTEMA ÓPTIMO
                     </p>
                 </div>
             </div>

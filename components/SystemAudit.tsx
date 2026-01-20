@@ -163,7 +163,7 @@ const SystemAudit: React.FC<SystemAuditProps> = ({ onClose }) => {
         <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center gap-4">
             <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase">
                 <ShieldAlert size={12} />
-                <span>Zero-Knowledge Architecture Verified</span>
+                <span>Arquitectura Zero-Knowledge Verificada</span>
             </div>
             <button 
                 onClick={runDiagnostics}

@@ -370,7 +370,7 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                   <div className="absolute inset-0 bg-emerald-500/30 blur-xl rounded-full animate-pulse"></div>
                   <Loader2 className="animate-spin w-16 h-16 text-emerald-500 dark:text-emerald-400 relative z-10" />
               </div>
-              <p className="text-2xl font-mono text-emerald-600 dark:text-emerald-400 font-bold mb-2">ACCESSING...</p>
+              <p className="text-2xl font-mono text-emerald-600 dark:text-emerald-400 font-bold mb-2">ACCEDIENDO...</p>
               <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">Verificando firma AES-256-GCM</p>
           </div>
       )}
@@ -381,7 +381,7 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
              {isDecrypting && (
                  <div className="absolute inset-0 bg-white/90 dark:bg-slate-950/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
                       <Loader2 className="animate-spin w-10 h-10 text-red-500 mb-2" />
-                      <p className="text-red-500 dark:text-red-400 font-bold animate-pulse font-mono">UNLOCKING...</p>
+                      <p className="text-red-500 dark:text-red-400 font-bold animate-pulse font-mono">DESBLOQUEANDO...</p>
                  </div>
              )}
              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 via-orange-500 to-red-600 animate-pulse"></div>
@@ -437,7 +437,7 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                 </div>
                 <div className="flex items-center gap-2 text-slate-500 text-[10px] font-mono uppercase tracking-widest">
                     <Shield size={12} className={theme.color}/>
-                    SECURE VIEWER
+                    VISOR SEGURO
                 </div>
           </div>
 
@@ -581,7 +581,7 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
             </p>
              {burnStatus === 'burnt' && (
                 <div className="flex items-center gap-1 text-orange-500/50 text-[10px] uppercase font-bold">
-                    <Flame size={10} /> Purged
+                    <Flame size={10} /> Purgado
                 </div>
             )}
           </div>

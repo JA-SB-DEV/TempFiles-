@@ -237,7 +237,7 @@ export default function App() {
                   <h1 className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white">
                       CHRONOS
                   </h1>
-                  <p className="text-[10px] text-cyan-600 dark:text-cyan-400/80 font-mono tracking-widest uppercase">Ephemeral Data Vault</p>
+                  <p className="text-[10px] text-cyan-600 dark:text-cyan-400/80 font-mono tracking-widest uppercase">Bóveda de Datos Efímera</p>
                 </div>
             </div>
             
@@ -383,7 +383,7 @@ export default function App() {
         {/* Footer */}
         <footer className="p-6 text-center flex flex-col md:flex-row items-center justify-center gap-4 text-slate-500 dark:text-slate-600 text-[10px] font-mono uppercase tracking-widest relative z-20">
             <p className="flex items-center justify-center gap-2 opacity-50 hover:opacity-100 transition-opacity">
-                <Zap size={12} /> Secure Storage by Supabase
+                <Zap size={12} /> Almacenamiento Seguro vía Supabase
             </p>
         </footer>
 
