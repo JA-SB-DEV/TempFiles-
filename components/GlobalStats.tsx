@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getPublicStats } from '../services/supabaseClient';
-import { BarChart3, X, Database, Globe, Shield, Server, FileText, Image, Mic, Video, Paperclip, Activity } from 'lucide-react';
+import { BarChart3, X, Database, Globe, Shield, Server, FileText, Image, Mic, Video, Paperclip, Activity, ArrowLeft } from 'lucide-react';
 
 interface GlobalStatsProps {
   onClose: () => void;
@@ -50,13 +50,13 @@ const GlobalStats: React.FC<GlobalStatsProps> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl overflow-hidden flex flex-col relative">
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl overflow-hidden flex flex-col relative max-h-[90dvh]">
         
         {/* Decorative Grid BG */}
         <div className="absolute inset-0 bg-grid-pattern opacity-5 pointer-events-none"></div>
 
         {/* Header */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950/50 relative z-10">
+        <div className="p-5 md:p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950/50 relative z-10 shrink-0">
             <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-600 dark:text-violet-400">
                     <BarChart3 size={20} />
@@ -75,7 +75,7 @@ const GlobalStats: React.FC<GlobalStatsProps> = ({ onClose }) => {
         </div>
 
         {/* Body */}
-        <div className="p-6 md:p-8 overflow-y-auto relative z-10">
+        <div className="p-5 md:p-8 overflow-y-auto relative z-10 flex-1">
             
             {/* Top Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -163,8 +163,18 @@ const GlobalStats: React.FC<GlobalStatsProps> = ({ onClose }) => {
                     * Muestra basada en las últimas 100 transacciones anónimas.
                 </p>
             </div>
-
         </div>
+
+        {/* Footer for Mobile Access */}
+        <div className="p-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 shrink-0 md:hidden">
+            <button 
+                onClick={onClose}
+                className="w-full py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 font-bold shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"
+            >
+                <ArrowLeft size={18} /> Volver
+            </button>
+        </div>
+
       </div>
     </div>
   );

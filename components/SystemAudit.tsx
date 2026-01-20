@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { Activity, Database, Lock, Server, Wifi, CheckCircle2, XCircle, Loader2, RefreshCw, X, ShieldAlert } from 'lucide-react';
+import { Activity, Database, Lock, Server, Wifi, CheckCircle2, XCircle, Loader2, RefreshCw, X, ShieldAlert, ArrowLeft } from 'lucide-react';
 
 interface AuditItem {
   id: string;
@@ -105,10 +105,10 @@ const SystemAudit: React.FC<SystemAuditProps> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
         
         {/* Header */}
-        <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex justify-between items-center">
+        <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex justify-between items-center shrink-0">
             <div className="flex items-center gap-3">
                 <div className={`p-2 rounded-lg ${overallStatus === 'scanning' ? 'bg-blue-100 text-blue-600' : overallStatus === 'healthy' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
                     <Activity size={20} className={overallStatus === 'scanning' ? 'animate-spin' : ''} />
@@ -160,11 +160,19 @@ const SystemAudit: React.FC<SystemAuditProps> = ({ onClose }) => {
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center gap-4">
-            <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase">
+        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center gap-4 shrink-0">
+            <div className="hidden md:flex items-center gap-2 text-[10px] text-slate-400 uppercase">
                 <ShieldAlert size={12} />
                 <span>Arquitectura Zero-Knowledge Verificada</span>
             </div>
+            
+            <button 
+                onClick={onClose}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold transition-colors md:hidden flex items-center gap-2"
+            >
+                <ArrowLeft size={14} /> Cerrar
+            </button>
+
             <button 
                 onClick={runDiagnostics}
                 disabled={overallStatus === 'scanning'}
