@@ -3,8 +3,9 @@ import QRCode from 'qrcode';
 import UploadView from './components/UploadView';
 import RetrieveView from './components/RetrieveView';
 import SystemAudit from './components/SystemAudit';
+import GlobalStats from './components/GlobalStats';
 import { TempFile } from './types';
-import { Hourglass, ShieldCheck, Copy, CheckCircle2, QrCode, ArrowLeft, Zap, Github, Repeat, Link as LinkIcon, Eye, ExternalLink, Infinity, Sun, Moon, Activity } from 'lucide-react';
+import { Hourglass, ShieldCheck, Copy, CheckCircle2, QrCode, ArrowLeft, Zap, Github, Repeat, Link as LinkIcon, Eye, ExternalLink, Infinity, Sun, Moon, Activity, BarChart3 } from 'lucide-react';
 
 // --- Particle System Types ---
 interface Particle {
@@ -23,7 +24,10 @@ export default function App() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [linkCopySuccess, setLinkCopySuccess] = useState(false);
   const [externalCode, setExternalCode] = useState<string>('');
+  
+  // Modals
   const [showAudit, setShowAudit] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   
   // Theme State
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -238,7 +242,16 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-3">
-                {/* Audit Button (New Location) */}
+                {/* Stats Button */}
+                 <button 
+                    onClick={() => setShowStats(true)}
+                    className="p-2.5 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 shadow-md border border-slate-200 dark:border-slate-700 hover:scale-105 transition-transform hover:text-violet-500 dark:hover:text-violet-400"
+                    title="Estadísticas Globales"
+                >
+                    <BarChart3 size={18} />
+                </button>
+
+                {/* Audit Button */}
                 <button 
                     onClick={() => setShowAudit(true)}
                     className="p-2.5 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 shadow-md border border-slate-200 dark:border-slate-700 hover:scale-105 transition-transform hover:text-cyan-500 dark:hover:text-cyan-400"
@@ -363,6 +376,9 @@ export default function App() {
 
         {/* Audit Modal */}
         {showAudit && <SystemAudit onClose={() => setShowAudit(false)} />}
+        
+        {/* Stats Modal */}
+        {showStats && <GlobalStats onClose={() => setShowStats(false)} />}
 
         {/* Footer */}
         <footer className="p-6 text-center flex flex-col md:flex-row items-center justify-center gap-4 text-slate-500 dark:text-slate-600 text-[10px] font-mono uppercase tracking-widest relative z-20">

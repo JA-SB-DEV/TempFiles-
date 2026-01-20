@@ -27,3 +27,34 @@ export const checkCodeExists = async (code: string): Promise<boolean> => {
   
   return !!data;
 };
+
+/**
+ * Obtiene estadísticas públicas anónimas.
+ * Retorna el conteo total de archivos activos y desglose aproximado.
+ */
+export const getPublicStats = async () => {
+    // 1. Get Total Active Count
+    const { count, error } = await supabase
+        .from('temp_files')
+        .select('*', { count: 'exact', head: true });
+
+    if (error) throw error;
+
+    // 2. Get Type Distribution (Limit to last 100 to avoid heavy query on client)
+    // In a real production app, this would be a Postgres View or RPC function.
+    const { data: recentFiles } = await supabase
+        .from('temp_files')
+        .select('type')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+    const types = (recentFiles || []).reduce((acc, curr) => {
+        acc[curr.type] = (acc[curr.type] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    return {
+        activeFiles: count || 0,
+        sampleTypes: types
+    };
+};
