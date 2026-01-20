@@ -2,8 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { TempFile } from '../types';
 import { supabase, isSupabaseConfigured, checkCodeExists } from '../services/supabaseClient';
 import { encryptFile, hashString } from '../utils/crypto';
-import JSZip from 'jszip';
-import { Camera, Video, Upload, Loader2, Database, Clock, Flame, Shield, X, FileText, Image as ImageIcon, Mic, StopCircle, Play, Trash2, Lock, ArrowRight, ShieldCheck, Eye, HardDrive, File as FileIcon, Paperclip, Fingerprint, Package, Layers } from 'lucide-react';
+import { Camera, Video, Upload, Loader2, Database, Clock, Flame, Shield, X, FileText, Image as ImageIcon, Mic, StopCircle, Play, Trash2, Lock, ArrowRight, ShieldCheck, Eye, HardDrive, File as FileIcon, Paperclip, Fingerprint } from 'lucide-react';
 
 interface UploadViewProps {
   onUploadSuccess: (file: TempFile) => void;
@@ -12,18 +11,7 @@ interface UploadViewProps {
 type UploadMode = 'file' | 'text' | 'audio' | 'document';
 
 // Theme Helpers
-const getTheme = (mode: UploadMode, fileType?: string, isArchive?: boolean) => {
-    if (isArchive) {
-         return {
-            color: 'text-indigo-600 dark:text-indigo-400',
-            border: 'border-indigo-500/50',
-            focusRing: 'focus:ring-indigo-500',
-            bg: 'bg-indigo-600',
-            gradient: 'from-indigo-500 to-purple-600',
-            shadow: 'shadow-[0_0_30px_rgba(99,102,241,0.2)]',
-            accent: 'text-purple-500 dark:text-purple-400'
-        };
-    }
+const getTheme = (mode: UploadMode, fileType?: string) => {
     if (mode === 'text') {
         return {
             color: 'text-amber-600 dark:text-amber-400',
@@ -110,39 +98,28 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
   
   // Modal State
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showPrivacyInfo, setShowPrivacyInfo] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Dynamic Theme
-  const isArchive = selectedFiles.length > 1;
-  const theme = getTheme(mode, selectedFiles[0]?.type, isArchive);
+  const theme = getTheme(mode, selectedFiles[0]?.type);
 
   const processFiles = (files: FileList | File[]) => {
-    const validFiles: File[] = [];
-    let totalSize = 0;
+    // Only accept the first file
+    if (files.length > 0) {
+        const file = files[0];
+        if (file.size > 50 * 1024 * 1024) {
+            alert("El archivo excede el límite (Máx 50MB)");
+            return;
+        }
+        setSelectedFiles([file]);
 
-    for (let i = 0; i < files.length; i++) {
-        totalSize += files[i].size;
-        validFiles.push(files[i]);
-    }
-
-    if (totalSize > 50 * 1024 * 1024) { // 50MB Total Limit
-      alert("El tamaño total excede el límite (Máx 50MB)");
-      return;
-    }
-
-    setSelectedFiles(validFiles);
-
-    // Only set preview if it's a single file and an image/video
-    if (validFiles.length === 1) {
+        // Set preview
         if (mode === 'document') {
              setPreviewUrl(null);
         } else {
-             setPreviewUrl(URL.createObjectURL(validFiles[0]));
+             setPreviewUrl(URL.createObjectURL(file));
         }
-    } else {
-        setPreviewUrl(null);
     }
   };
 
@@ -287,19 +264,6 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
         if (mode === 'text') {
             const blob = new Blob([textContent], { type: 'text/plain' });
             fileToEncrypt = new File([blob], 'secret_note.txt', { type: 'text/plain' });
-        } else if (selectedFiles.length > 1) {
-            // MULTIPLE FILES: Create ZIP
-            setStatusMessage('Comprimiendo (ZIP)...');
-            setProgress(5);
-            
-            const zip = new JSZip();
-            selectedFiles.forEach(file => {
-                zip.file(file.name, file);
-            });
-            
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
-            fileToEncrypt = new File([zipBlob], 'archive.zip', { type: 'application/zip' });
-            
         } else {
             // SINGLE FILE
             fileToEncrypt = selectedFiles[0]!;
@@ -365,7 +329,6 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
         // Determine DB Type
         let type: TempFile['type'] = 'image';
         if (mode === 'text') type = 'text';
-        else if (selectedFiles.length > 1) type = 'archive';
         else if (mode === 'audio' || fileToEncrypt.type.startsWith('audio/')) type = 'audio';
         else if (fileToEncrypt.type.startsWith('video/')) type = 'video';
         else if (mode === 'document') type = 'document';
@@ -480,13 +443,6 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                         </div>
                     </div>
 
-                    {isArchive && (
-                        <div className="bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-xl text-xs text-indigo-600 dark:text-indigo-300 flex items-center gap-2">
-                             <Layers size={16} />
-                             <p>Se creará un archivo <strong>ZIP</strong> con <strong>{selectedFiles.length}</strong> elementos.</p>
-                        </div>
-                    )}
-
                     <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl text-xs text-blue-600 dark:text-blue-300 flex gap-2">
                         <Fingerprint size={16} className="shrink-0 mt-0.5" />
                         <p>
@@ -594,36 +550,19 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                                 </div>
                                 <p className="text-slate-600 dark:text-slate-300 font-bold text-lg group-hover:text-slate-800 dark:group-hover:text-white transition-colors">Toca o Arrastra</p>
                                 <p className="text-slate-500 mt-2 text-xs text-center font-mono uppercase tracking-wide">
-                                    Imágenes • Videos • Múltiples
+                                    Imágenes • Videos
                                 </p>
                                 <input 
                                     ref={fileInputRef}
                                     type="file" 
                                     accept="image/*,video/*" 
-                                    multiple
                                     className="hidden" 
                                     onChange={handleFileChange}
                                 />
                             </div>
                         ) : (
                             <div className="relative h-[260px] rounded-3xl overflow-hidden bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 group flex items-center justify-center">
-                                {selectedFiles.length > 1 ? (
-                                    // STACK PREVIEW FOR MULTIPLE FILES
-                                    <div className="flex flex-col items-center">
-                                         <div className="relative mb-4">
-                                            <div className="absolute top-0 left-0 w-24 h-24 bg-indigo-500/20 rounded-2xl border border-indigo-500/30 transform -rotate-6 translate-x-2"></div>
-                                            <div className="absolute top-0 left-0 w-24 h-24 bg-indigo-500/40 rounded-2xl border border-indigo-500/30 transform rotate-6 -translate-x-2"></div>
-                                            <div className="relative w-24 h-24 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl border border-indigo-400 z-10">
-                                                <Layers size={40} className="text-white" />
-                                                <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
-                                                    {selectedFiles.length}
-                                                </div>
-                                            </div>
-                                         </div>
-                                         <p className="font-bold text-indigo-600 dark:text-indigo-400">{selectedFiles.length} Archivos</p>
-                                         <p className="text-xs text-slate-500 mt-1">Se comprimirán en un ZIP</p>
-                                    </div>
-                                ) : selectedFiles[0].type.startsWith('video/') ? (
+                                {selectedFiles[0].type.startsWith('video/') ? (
                                     <video src={previewUrl!} className="w-full h-full object-contain bg-black" />
                                 ) : (
                                     <img src={previewUrl!} alt="Preview" className="w-full h-full object-contain bg-black" />
@@ -660,42 +599,24 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                                 </div>
                                 <p className="text-slate-600 dark:text-slate-300 font-bold text-lg group-hover:text-slate-800 dark:group-hover:text-white transition-colors">Subir Documento</p>
                                 <p className="text-slate-500 mt-2 text-xs text-center font-mono uppercase tracking-wide">
-                                    PDF • DOCX • TXT • Múltiples
+                                    PDF • DOCX • TXT
                                 </p>
                                 <input 
                                     ref={fileInputRef}
                                     type="file" 
                                     accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx" 
-                                    multiple
                                     className="hidden" 
                                     onChange={handleFileChange}
                                 />
                             </div>
                         ) : (
                             <div className="relative h-[260px] rounded-3xl overflow-hidden bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 group flex flex-col items-center justify-center">
-                                {selectedFiles.length > 1 ? (
-                                     <div className="flex flex-col items-center">
-                                        <div className="relative mb-4">
-                                            <div className="absolute top-0 left-0 w-24 h-24 bg-indigo-500/20 rounded-2xl border border-indigo-500/30 transform -rotate-3 translate-x-1"></div>
-                                            <div className="relative w-24 h-24 bg-indigo-600/10 rounded-2xl flex items-center justify-center shadow-xl border border-indigo-500/50 z-10">
-                                                <Layers size={40} className="text-indigo-600 dark:text-indigo-400" />
-                                                <div className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
-                                                    {selectedFiles.length}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <p className="font-bold text-indigo-600 dark:text-indigo-400">{selectedFiles.length} Documentos</p>
-                                        <p className="text-xs text-slate-500 mt-1 font-mono">{(selectedFiles.reduce((acc, f) => acc + f.size, 0) / 1024 / 1024).toFixed(2)} MB Total</p>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div className="w-24 h-24 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-4 border border-emerald-500/20">
-                                            <FileIcon size={48} className="text-emerald-600 dark:text-emerald-400" />
-                                        </div>
-                                        <p className="text-emerald-600 dark:text-emerald-300 font-bold max-w-[80%] truncate">{selectedFiles[0].name}</p>
-                                        <p className="text-emerald-600/60 dark:text-emerald-500/50 text-xs font-mono mt-1">{(selectedFiles[0].size / 1024 / 1024).toFixed(2)} MB</p>
-                                    </>
-                                )}
+                                
+                                <div className="w-24 h-24 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-4 border border-emerald-500/20">
+                                    <FileIcon size={48} className="text-emerald-600 dark:text-emerald-400" />
+                                </div>
+                                <p className="text-emerald-600 dark:text-emerald-300 font-bold max-w-[80%] truncate">{selectedFiles[0].name}</p>
+                                <p className="text-emerald-600/60 dark:text-emerald-500/50 text-xs font-mono mt-1">{(selectedFiles[0].size / 1024 / 1024).toFixed(2)} MB</p>
                                 
                                 <button 
                                     onClick={removeFile}

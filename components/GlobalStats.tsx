@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getPublicStats } from '../services/supabaseClient';
-import { BarChart3, X, Database, Globe, Shield, Server, FileText, Image, Mic, Video, Package, Paperclip, Activity } from 'lucide-react';
+import { BarChart3, X, Database, Globe, Shield, Server, FileText, Image, Mic, Video, Paperclip, Activity } from 'lucide-react';
 
 interface GlobalStatsProps {
   onClose: () => void;
@@ -136,7 +136,6 @@ const GlobalStats: React.FC<GlobalStatsProps> = ({ onClose }) => {
                         { id: 'audio', label: 'Audio / Voz', icon: <Mic size={14}/>, color: 'bg-pink-500' },
                         { id: 'text', label: 'Notas Secretas', icon: <FileText size={14}/>, color: 'bg-amber-500' },
                         { id: 'document', label: 'Documentos', icon: <Paperclip size={14}/>, color: 'bg-emerald-500' },
-                        { id: 'archive', label: 'Archivos ZIP', icon: <Package size={14}/>, color: 'bg-indigo-500' },
                     ].map((type) => {
                         const percent = getPercent(type.id);
                         return (
