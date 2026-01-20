@@ -63,6 +63,137 @@ const getRetrieveTheme = (type?: string) => {
     };
 };
 
+// --- Disintegration Particle System ---
+const useDisintegration = (isActive: boolean, containerRef: React.RefObject<HTMLDivElement>) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        if (!isActive || !containerRef.current || !canvasRef.current) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const container = containerRef.current;
+        const { width, height } = container.getBoundingClientRect();
+
+        canvas.width = width;
+        canvas.height = height;
+
+        if (!ctx) return;
+
+        interface DustParticle {
+            x: number;
+            y: number;
+            vx: number;
+            vy: number;
+            life: number;
+            color: string;
+            size: number;
+        }
+
+        const particles: DustParticle[] = [];
+        // Create particles
+        for(let i=0; i<800; i++) {
+            particles.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                vx: (Math.random() - 0.5) * 4,
+                vy: -Math.random() * 4 - 1, // Move Up
+                life: Math.random() * 60 + 20,
+                color: `rgba(${Math.floor(Math.random()*50+200)}, ${Math.floor(Math.random()*50+100)}, 50, ${Math.random()})`, // Fire/Dust colors
+                size: Math.random() * 3 + 1
+            });
+        }
+
+        let animationFrame: number;
+        
+        const render = () => {
+            ctx.clearRect(0,0, width, height);
+            
+            let activeParticles = 0;
+            particles.forEach(p => {
+                if(p.life > 0) {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life--;
+                    p.size *= 0.96; // shrink
+
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    activeParticles++;
+                }
+            });
+
+            if(activeParticles > 0) {
+                animationFrame = requestAnimationFrame(render);
+            }
+        };
+
+        render();
+
+        return () => cancelAnimationFrame(animationFrame);
+    }, [isActive]);
+
+    return canvasRef;
+};
+
+// --- Hacker Console Component ---
+const HackerConsole = () => {
+    const [logs, setLogs] = useState<string[]>([]);
+    const messages = [
+        "Inicializando Handshake Seguro...",
+        "Verificando Certificados SSL/TLS...",
+        "Conectando a Bóveda Descentralizada...",
+        "Obteniendo Hash SHA-256...",
+        "Validando Integridad de Datos...",
+        "Derivando Llave Maestra (PBKDF2)...",
+        "Autenticando Vector de Inicialización...",
+        "Desencriptando Bloque AES-GCM...",
+        "Reensamblando Paquetes de Datos...",
+        "ACCESO AUTORIZADO"
+    ];
+
+    useEffect(() => {
+        let currentIndex = 0;
+        const interval = setInterval(() => {
+            if (currentIndex < messages.length) {
+                setLogs(prev => [...prev, messages[currentIndex]]);
+                currentIndex++;
+            } else {
+                clearInterval(interval);
+            }
+        }, 150); // Speed of logs
+
+        return () => clearInterval(interval);
+    }, []);
+
+    return (
+        <div className="w-full bg-black rounded-xl p-4 font-mono text-xs shadow-inner border border-emerald-500/30 relative overflow-hidden h-64 flex flex-col">
+            <div className="absolute top-0 right-0 p-2 opacity-50">
+                <Shield size={16} className="text-emerald-500 animate-pulse" />
+            </div>
+            <div className="absolute inset-0 bg-emerald-500/5 pointer-events-none animate-pulse"></div>
+            <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
+                {logs.map((log, i) => (
+                    <div key={i} className="flex gap-2 text-emerald-500/90">
+                        <span className="opacity-50 select-none">{`>`}</span>
+                        <span className={i === logs.length - 1 ? "animate-pulse font-bold text-emerald-400" : ""}>{log}</span>
+                        {i === logs.length - 1 && logs.length < messages.length && (
+                             <span className="w-2 h-4 bg-emerald-500 animate-pulse inline-block align-middle ml-1"></span>
+                        )}
+                    </div>
+                ))}
+            </div>
+            <div className="mt-2 border-t border-emerald-500/20 pt-2 flex justify-between items-center text-[10px] text-emerald-600/70 uppercase">
+                <span>Protocolo: Chronos_v1</span>
+                <span>Estado: {logs.length === messages.length ? "Listo" : "Procesando"}</span>
+            </div>
+        </div>
+    );
+};
+
+
 const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
   const [code, setCode] = useState(initialCode || '');
   const [foundFile, setFoundFile] = useState<TempFile | null>(null);
@@ -88,6 +219,10 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
   const [cachedFileInfo, setCachedFileInfo] = useState<TempFile | null>(null);
 
   const hasAutoSearched = useRef(false);
+  const contentContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Hook the disintegration canvas
+  const disintegrationCanvasRef = useDisintegration(burnStatus === 'burning', contentContainerRef);
 
   // Dynamic Theme State
   const theme = getRetrieveTheme(foundFile?.type);
@@ -171,6 +306,8 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
       setFoundFile(fileInfo); // Allows timer to start tick
 
       // 5. Attempt Decryption using raw targetCode (the Key)
+      // Add artificial delay for the hacker console effect if needed, but actually
+      // we just call it and let the state update.
       attemptDecryption(encryptedBlob, fileInfo, targetCode);
 
     } catch (err: any) {
@@ -184,6 +321,9 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
       setError(null);
 
       try {
+          // Delay purely for the "Hacker Console" effect to be readable (Trust UX)
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
           // Decrypt Client-Side using the CODE (or CODE+PASS)
           const { blob: decryptedBlob, options, mimeType } = await decryptFile(blob, keyString);
           
@@ -363,15 +503,12 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
         </div>
       )}
 
-      {/* Decrypting Loading State */}
+      {/* Decrypting Loading State (Hacker Console) */}
       {isDecrypting && !isPasswordLocked && (
-          <div className="text-center py-24 bg-white/50 dark:bg-slate-900/50 rounded-3xl border border-slate-200 dark:border-slate-700 backdrop-blur-md">
-              <div className="relative inline-block mb-6">
-                  <div className="absolute inset-0 bg-emerald-500/30 blur-xl rounded-full animate-pulse"></div>
-                  <Loader2 className="animate-spin w-16 h-16 text-emerald-500 dark:text-emerald-400 relative z-10" />
+          <div className="w-full animate-fade-in">
+              <div className="bg-slate-900 border border-slate-700 rounded-3xl p-2 shadow-2xl">
+                 <HackerConsole />
               </div>
-              <p className="text-2xl font-mono text-emerald-600 dark:text-emerald-400 font-bold mb-2">ACCEDIENDO...</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">Verificando firma AES-256-GCM</p>
           </div>
       )}
 
@@ -466,8 +603,17 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
              {/* Background Grid inside viewer */}
              <div className="absolute inset-0 bg-grid-pattern opacity-5 dark:opacity-10 pointer-events-none"></div>
 
-            {/* --- BURN ANIMATION CONTAINER --- */}
-            <div className={`relative w-full h-full flex items-center justify-center transition-all duration-700 ${!isRevealed ? 'spoiler-blur' : 'revealed'} ${burnStatus === 'burning' ? 'burn-active' : ''}`}>
+             {/* DISINTEGRATION CANVAS OVERLAY */}
+             <canvas 
+                ref={disintegrationCanvasRef} 
+                className="absolute inset-0 z-50 pointer-events-none" 
+             />
+
+            {/* --- CONTENT CONTAINER WITH BURN ANIMATION --- */}
+            <div 
+                ref={contentContainerRef}
+                className={`relative w-full h-full flex items-center justify-center transition-all duration-[2000ms] ${!isRevealed ? 'spoiler-blur' : 'revealed'} ${burnStatus === 'burning' ? 'opacity-0 scale-105 filter blur-lg' : ''}`}
+            >
                 
                 {foundFile.type === 'video' && decryptedUrl ? (
                    <div className="w-full h-full flex items-center justify-center bg-black rounded-lg overflow-hidden">
@@ -532,10 +678,10 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                   </div>
                 ) : null}
 
-                {/* Fire Overlay for Animation */}
+                {/* Fire Overlay for Animation (Backup if Canvas fails) */}
                 {burnStatus === 'burning' && (
                     <div className="absolute inset-0 z-30 flex items-end justify-center pointer-events-none">
-                         <div className="w-full h-full bg-orange-500/20 mix-blend-color-dodge animate-pulse absolute inset-0"></div>
+                         <div className="w-full h-full bg-orange-500/10 mix-blend-color-dodge animate-pulse absolute inset-0"></div>
                     </div>
                 )}
             </div>

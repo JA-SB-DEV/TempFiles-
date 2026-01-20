@@ -4,8 +4,9 @@ import UploadView from './components/UploadView';
 import RetrieveView from './components/RetrieveView';
 import SystemAudit from './components/SystemAudit';
 import GlobalStats from './components/GlobalStats';
+import InfoModal from './components/InfoModal';
 import { TempFile } from './types';
-import { Hourglass, ShieldCheck, Copy, CheckCircle2, QrCode, ArrowLeft, Zap, Github, Repeat, Link as LinkIcon, Eye, ExternalLink, Infinity, Sun, Moon, Activity, BarChart3 } from 'lucide-react';
+import { Hourglass, ShieldCheck, Copy, CheckCircle2, QrCode, ArrowLeft, Zap, Github, Repeat, Link as LinkIcon, Eye, ExternalLink, Infinity, Sun, Moon, Activity, BarChart3, Info } from 'lucide-react';
 
 // --- Particle System Types ---
 interface Particle {
@@ -16,6 +17,72 @@ interface Particle {
   size: number;
   color: string;
 }
+
+// --- Reactive Cursor Component ---
+const ReactiveCursor = () => {
+  const cursorRef = useRef<HTMLDivElement>(null);
+  const trailerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const cursor = cursorRef.current;
+    const trailer = trailerRef.current;
+    
+    // Check if device has touch capability (usually mobile) to disable custom cursor
+    if (window.matchMedia("(pointer: coarse)").matches) return;
+
+    let mouseX = 0;
+    let mouseY = 0;
+    let trailerX = 0;
+    let trailerY = 0;
+
+    const moveCursor = (e: MouseEvent) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      
+      if (cursor) {
+        cursor.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0)`;
+      }
+    };
+
+    const animateTrailer = () => {
+      const distX = mouseX - trailerX;
+      const distY = mouseY - trailerY;
+      
+      trailerX += distX * 0.15; // Inertia factor
+      trailerY += distY * 0.15;
+      
+      if (trailer) {
+        trailer.style.transform = `translate3d(${trailerX}px, ${trailerY}px, 0)`;
+      }
+      
+      requestAnimationFrame(animateTrailer);
+    };
+
+    window.addEventListener('mousemove', moveCursor);
+    const animationId = requestAnimationFrame(animateTrailer);
+
+    return () => {
+      window.removeEventListener('mousemove', moveCursor);
+      cancelAnimationFrame(animationId);
+    };
+  }, []);
+
+  // Hide on mobile via CSS class
+  return (
+    <>
+      <div 
+        ref={cursorRef} 
+        className="fixed top-0 left-0 w-2 h-2 bg-cyan-500 rounded-full z-[100] pointer-events-none mix-blend-difference hidden md:block -ml-1 -mt-1"
+      />
+      <div 
+        ref={trailerRef} 
+        className="fixed top-0 left-0 w-8 h-8 border border-cyan-500/50 rounded-full z-[99] pointer-events-none hidden md:flex items-center justify-center -ml-4 -mt-4 transition-opacity duration-300"
+      >
+        <div className="w-1 h-1 bg-cyan-500/50 rounded-full animate-ping"></div>
+      </div>
+    </>
+  );
+};
 
 export default function App() {
   const [view, setView] = useState<'upload' | 'retrieve'>('upload');
@@ -28,6 +95,7 @@ export default function App() {
   // Modals
   const [showAudit, setShowAudit] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   
   // Theme State
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -215,8 +283,11 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden text-slate-800 dark:text-slate-200 font-sans selection:bg-cyan-500/30">
+    <div className="min-h-screen relative overflow-hidden text-slate-800 dark:text-slate-200 font-sans selection:bg-cyan-500/30 cursor-none md:cursor-default">
       
+      {/* Custom Reactive Cursor */}
+      <ReactiveCursor />
+
       {/* Background Atmosphere */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-[100px] animate-blob mix-blend-multiply dark:mix-blend-screen pointer-events-none"></div>
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-[100px] animate-blob animation-delay-2000 mix-blend-multiply dark:mix-blend-screen pointer-events-none"></div>
@@ -242,6 +313,15 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-3">
+                {/* Info Button */}
+                <button 
+                    onClick={() => setShowInfo(true)}
+                    className="p-2.5 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 shadow-md border border-slate-200 dark:border-slate-700 hover:scale-105 transition-transform hover:text-blue-500 dark:hover:text-blue-400"
+                    title="Información y Ayuda"
+                >
+                    <Info size={18} />
+                </button>
+
                 {/* Stats Button */}
                  <button 
                     onClick={() => setShowStats(true)}
@@ -374,6 +454,9 @@ export default function App() {
 
         </main>
 
+        {/* Info Modal */}
+        {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
+        
         {/* Audit Modal */}
         {showAudit && <SystemAudit onClose={() => setShowAudit(false)} />}
         

@@ -1,8 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { TempFile } from '../types';
 import { supabase, isSupabaseConfigured, checkCodeExists } from '../services/supabaseClient';
 import { encryptFile, hashString } from '../utils/crypto';
-import { Camera, Video, Upload, Loader2, Database, Clock, Flame, Shield, X, FileText, Image as ImageIcon, Mic, StopCircle, Play, Trash2, Lock, ArrowRight, ShieldCheck, Eye, HardDrive, File as FileIcon, Paperclip, Fingerprint } from 'lucide-react';
+import { Camera, Video, Upload, Loader2, Database, Clock, Flame, Shield, X, FileText, Image as ImageIcon, Mic, StopCircle, Play, Trash2, Lock, ArrowRight, ShieldCheck, Eye, HardDrive, File as FileIcon, Paperclip, Fingerprint, Terminal, Unlock } from 'lucide-react';
 
 interface UploadViewProps {
   onUploadSuccess: (file: TempFile) => void;
@@ -256,7 +256,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
     setShowConfirmModal(false);
     setIsProcessing(true);
     setProgress(0); 
-    setStatusMessage('Iniciando...');
+    setStatusMessage('INICIANDO PROTOCOLO...');
 
     try {
         let fileToEncrypt: File;
@@ -270,13 +270,15 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
         }
     
         setProgress(15);
-        setStatusMessage('Generando llaves...');
+        setStatusMessage('GENERANDO LLAVES (ECDH)...');
         const code = generatedCode || generateRandomCode();
       
         const encryptionKey = password ? (code + password) : code;
 
-        setProgress(20);
-        setStatusMessage('Encriptando (AES-GCM)...');
+        setTimeout(() => {
+            setProgress(30);
+            setStatusMessage('CIFRADO AES-GCM-256...');
+        }, 800);
 
         const encryptedBlob = await encryptFile(
             fileToEncrypt, 
@@ -291,19 +293,14 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
         // ZERO KNOWLEDGE ARCHITECTURE
         const codeHash = await hashString(code);
 
-        setProgress(40);
-        setStatusMessage('Subiendo a la nube...');
+        setTimeout(() => {
+            setProgress(60);
+            setStatusMessage('SUBIENDO A LA NUBE...');
+        }, 1500);
 
         const fileExt = 'enc';
         const fileName = `${codeHash}-${Date.now()}.${fileExt}`;
         const filePath = `${fileName}`;
-
-        const interval = setInterval(() => {
-            setProgress(prev => {
-                if (prev >= 85) return prev;
-                return prev + 5;
-            });
-        }, 300);
 
         const { error: uploadError } = await supabase.storage
             .from('chronos_files')
@@ -311,7 +308,6 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
             contentType: 'application/octet-stream'
             });
 
-        clearInterval(interval);
         if (uploadError) {
             if (uploadError.message.includes("resource") || uploadError.message.includes("bucket")) {
                 throw new Error("Bucket 'chronos_files' no encontrado en Supabase.");
@@ -320,7 +316,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
         }
 
         setProgress(90);
-        setStatusMessage('Finalizando registro...');
+        setStatusMessage('FINALIZANDO REGISTRO...');
 
         const expiresInMs = duration * 60 * 1000;
         const now = Date.now();
@@ -358,8 +354,12 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
         if (dbError) throw dbError;
 
         setProgress(100);
-        setStatusMessage('¡Completado!');
-        onUploadSuccess(newFile);
+        setStatusMessage('¡COMPLETADO!');
+        
+        // Small delay to show 100% before switch
+        setTimeout(() => {
+            onUploadSuccess(newFile);
+        }, 800);
 
     } catch (error: any) {
       console.error("Upload failed", error);
@@ -382,27 +382,81 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
     }
   };
 
-  // Reusable Progress Overlay Component
-  const ProgressOverlay = () => (
-      <div className="absolute inset-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center z-20 rounded-2xl animate-fade-in border border-slate-200 dark:border-white/5">
-          <div className="w-64 h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-4 relative shadow-inner">
-              <div 
-                className={`h-full bg-gradient-to-r ${theme.gradient} transition-all duration-300 relative`}
-                style={{ width: `${progress}%` }}
-              >
-                  <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px] animate-pulse"></div>
+  // --- Vault Strength Logic ---
+  const calculateStrength = (pass: string) => {
+      if (!pass) return { score: 0, label: '', color: 'bg-slate-200' };
+      
+      let score = 0;
+      if (pass.length > 4) score += 20;
+      if (pass.length > 8) score += 30;
+      if (pass.length > 12) score += 20;
+      if (/[A-Z]/.test(pass)) score += 10;
+      if (/[0-9]/.test(pass)) score += 10;
+      if (/[^A-Za-z0-9]/.test(pass)) score += 10;
+
+      if (score < 40) return { score: 20, label: 'Instantáneo', color: 'bg-red-500' };
+      if (score < 70) return { score: 50, label: '3 Semanas', color: 'bg-orange-500' };
+      if (score < 90) return { score: 80, label: '50 Años', color: 'bg-yellow-500' };
+      return { score: 100, label: '3 Millones de Años', color: 'bg-emerald-500' };
+  };
+
+  const strength = calculateStrength(password);
+
+  // --- Cyberpunk Hex Visualization Component ---
+  const CyberProgressOverlay = () => {
+    const [hexLines, setHexLines] = useState<string[]>([]);
+    
+    // Generate random hex lines
+    useEffect(() => {
+        const chars = '0123456789ABCDEF';
+        const generateLine = () => {
+            let line = '0x';
+            for (let i = 0; i < 24; i++) line += chars[Math.floor(Math.random() * 16)];
+            return line;
+        };
+
+        const interval = setInterval(() => {
+            setHexLines(prev => {
+                const newLines = [...prev, generateLine()];
+                if (newLines.length > 8) newLines.shift(); // Keep only last 8 lines
+                return newLines;
+            });
+        }, 100);
+
+        return () => clearInterval(interval);
+    }, []);
+
+    return (
+      <div className="absolute inset-0 bg-slate-950/90 z-20 rounded-2xl flex flex-col items-center justify-center p-6 overflow-hidden animate-fade-in font-mono">
+          {/* Matrix/Hex Background Effect */}
+          <div className="absolute inset-0 opacity-20 pointer-events-none select-none">
+             {hexLines.map((line, i) => (
+                 <div key={i} className="text-[10px] text-green-500 whitespace-nowrap overflow-hidden">
+                     {line} {line}
+                 </div>
+             ))}
+          </div>
+
+          <div className="relative z-10 w-full max-w-[200px] text-center">
+              <Loader2 size={40} className="animate-spin text-cyan-500 mx-auto mb-4" />
+              <p className="text-cyan-400 font-bold text-sm tracking-widest animate-pulse mb-2">{statusMessage}</p>
+              
+              <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                  <div 
+                    className="h-full bg-cyan-500 relative transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  >
+                      <div className="absolute right-0 top-0 bottom-0 w-2 bg-white blur-[4px]"></div>
+                  </div>
+              </div>
+              <div className="flex justify-between mt-1 text-[10px] text-slate-500">
+                  <span>ENCRYPT_V2</span>
+                  <span>{Math.round(progress)}%</span>
               </div>
           </div>
-          <div className="flex flex-col items-center">
-              <p className={`${theme.color} font-bold font-mono text-lg animate-pulse mb-1`}>
-                  {statusMessage}
-              </p>
-              <p className="text-slate-500 dark:text-slate-400 text-xs font-mono tracking-widest">
-                  [{progress}%]
-              </p>
-          </div>
       </div>
-  );
+    );
+  };
 
   return (
     <div className="w-full max-w-md mx-auto animate-fade-in relative z-10">
@@ -574,7 +628,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                                 >
                                     <X size={18} />
                                 </button>
-                                {isProcessing && <ProgressOverlay />}
+                                {isProcessing && <CyberProgressOverlay />}
                             </div>
                         )
                     )}
@@ -624,7 +678,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                                 >
                                     <X size={18} />
                                 </button>
-                                {isProcessing && <ProgressOverlay />}
+                                {isProcessing && <CyberProgressOverlay />}
                             </div>
                         )
                     )}
@@ -696,7 +750,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                                 </div>
                             )}
                             
-                            {isProcessing && <ProgressOverlay />}
+                            {isProcessing && <CyberProgressOverlay />}
                         </div>
                     )}
 
@@ -710,7 +764,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                                 className={`w-full h-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-3xl p-6 text-slate-800 dark:text-slate-200 focus:${theme.border} focus:outline-none resize-none font-mono text-sm placeholder-slate-400 dark:placeholder-slate-600 transition-colors leading-relaxed`}
                                 disabled={isProcessing}
                             />
-                            {isProcessing && <ProgressOverlay />}
+                            {isProcessing && <CyberProgressOverlay />}
                         </div>
                     )}
                 </div>
@@ -804,6 +858,21 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                                     placeholder="Clave secreta..."
                                     className="w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-sm rounded-lg p-2 border border-slate-300 dark:border-slate-700 focus:border-slate-500 dark:focus:border-white focus:outline-none placeholder-slate-400 dark:placeholder-slate-600 font-mono"
                                 />
+                                {/* Vault Strength Indicator */}
+                                {password && (
+                                    <div className="mt-2 animate-fade-in">
+                                        <div className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-1">
+                                            <div 
+                                                className={`h-full transition-all duration-500 ease-out ${strength.color}`}
+                                                style={{ width: `${strength.score}%` }}
+                                            ></div>
+                                        </div>
+                                        <div className="flex justify-between items-center text-[10px]">
+                                             <span className="text-slate-400 font-bold uppercase tracking-wider">Estimación de Crackeo</span>
+                                             <span className={`font-mono font-bold ${strength.color.replace('bg-', 'text-')}`}>{strength.label}</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
