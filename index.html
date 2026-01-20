@@ -133,6 +133,74 @@
         z-index: 0;
         pointer-events: none;
       }
+
+      /* --- RETRO / HIGH CONTRAST MODE --- */
+      html.retro body {
+        background-color: #000000 !important;
+        color: #00FF00 !important;
+        font-family: 'JetBrains Mono', monospace !important;
+      }
+
+      /* Override gradients, shadows, and blur for Retro Mode */
+      html.retro * {
+        box-shadow: none !important;
+        backdrop-filter: none !important;
+        text-shadow: none !important;
+      }
+
+      html.retro .bg-grid-pattern {
+        background-image: linear-gradient(to right, #003300 1px, transparent 1px),
+                          linear-gradient(to bottom, #003300 1px, transparent 1px) !important;
+        mask-image: none !important;
+        opacity: 0.5 !important;
+      }
+
+      html.retro canvas {
+        opacity: 0.2 !important;
+      }
+
+      html.retro div[class*="backdrop-blur"],
+      html.retro div[class*="bg-white"],
+      html.retro div[class*="bg-slate-"],
+      html.retro button,
+      html.retro input,
+      html.retro header,
+      html.retro footer {
+        background: #000000 !important;
+        border-color: #00FF00 !important;
+        color: #00FF00 !important;
+        border-width: 1px !important;
+      }
+
+      /* Specific adjustments for Retro elements */
+      html.retro button:hover {
+        background: #00FF00 !important;
+        color: #000000 !important;
+      }
+
+      html.retro .text-slate-500,
+      html.retro .text-slate-400,
+      html.retro .text-slate-600 {
+        color: #00aa00 !important;
+      }
+
+      /* Remove gradient texts */
+      html.retro .bg-clip-text {
+        -webkit-text-fill-color: #00FF00 !important;
+        background: none !important;
+      }
+
+      /* Hide blob decorations */
+      html.retro .animate-blob, 
+      html.retro div[class*="bg-gradient-to"] {
+        display: none !important;
+      }
+      
+      /* Ensure borders are visible */
+      html.retro input {
+        border: 1px solid #00FF00 !important;
+      }
+
     </style>
 <script type="importmap">
 {

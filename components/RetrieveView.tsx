@@ -4,7 +4,7 @@ import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { decryptFile, hashString } from '../utils/crypto';
 import AudioPlayer from './AudioPlayer';
 import VideoPlayer from './VideoPlayer';
-import { Search, Clock, EyeOff, FileImage, FileVideo, AlertTriangle, Loader2, Database, Eye, Flame, Unlock, Shield, FileText, Copy, Check, Music, Lock, KeyRound, X, Maximize2, Terminal, Download, File as FileIcon } from 'lucide-react';
+import { Search, Clock, EyeOff, FileImage, FileVideo, AlertTriangle, Loader2, Database, Eye, Flame, Unlock, Shield, FileText, Copy, Check, Music, Lock, KeyRound, X, Maximize2, Terminal, Download, File as FileIcon, ArrowUp } from 'lucide-react';
 
 interface RetrieveViewProps {
   initialCode?: string;
@@ -212,6 +212,10 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
   const [textCopied, setTextCopied] = useState(false);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
+  // Swipe Gesture State
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+
   // Password Protection States
   const [isPasswordLocked, setIsPasswordLocked] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
@@ -388,21 +392,27 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
 
           // Initiate Burn Sequence after delay
           setTimeout(() => {
-              setBurnStatus('burning');
-              
-              // After animation (2s), delete
-              setTimeout(async () => {
-                   try {
-                        if (foundFile?.id) {
-                            await supabase.from('temp_files').delete().eq('id', foundFile.id);
-                        }
-                        setBurnStatus('burnt');
-                        setIsLightboxOpen(false); // Close lightbox if open
-                    } catch (e) {
-                        console.error("Error burning file", e);
-                    }
-              }, 2000); 
+              handleBurn();
           }, delaySeconds * 1000);
+      }
+  };
+
+  const handleBurn = () => {
+      if (burnStatus === 'pending') {
+          setBurnStatus('burning');
+          
+          // After animation (2s), delete
+          setTimeout(async () => {
+               try {
+                    if (foundFile?.id) {
+                        await supabase.from('temp_files').delete().eq('id', foundFile.id);
+                    }
+                    setBurnStatus('burnt');
+                    setIsLightboxOpen(false); // Close lightbox if open
+                } catch (e) {
+                    console.error("Error burning file", e);
+                }
+          }, 2000); 
       }
   };
 
@@ -456,6 +466,30 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
     }, 1000);
     return () => clearInterval(interval);
   }, [foundFile]);
+
+  // --- Touch Logic for Swipe to Destroy ---
+  const onTouchStart = (e: React.TouchEvent) => {
+      setTouchStartY(e.touches[0].clientY);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+      if (touchStartY !== null) {
+          const currentY = e.touches[0].clientY;
+          // Calculate upward movement
+          const diff = touchStartY - currentY;
+          if (diff > 0) {
+              setSwipeOffset(diff);
+          }
+      }
+  };
+
+  const onTouchEnd = () => {
+      if (swipeOffset > 150) { // Threshold for destruction
+          handleBurn();
+      }
+      setSwipeOffset(0);
+      setTouchStartY(null);
+  };
 
   return (
     <div className="w-full max-w-md mx-auto animate-fade-in relative z-10">
@@ -563,7 +597,17 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
 
       {/* Found & Decrypted State (Success) */}
       {!isPasswordLocked && foundFile && (decryptedUrl || decryptedText) && (
-        <div className={`bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border ${theme.border} relative group select-none transition-colors duration-500`}>
+        <div 
+            className={`bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border ${theme.border} relative group select-none transition-colors duration-500 touch-none`}
+            style={{ 
+                transform: swipeOffset > 0 ? `translateY(-${swipeOffset}px) scale(${1 - swipeOffset/1000})` : 'none',
+                opacity: swipeOffset > 0 ? 1 - swipeOffset/300 : 1,
+                transition: swipeOffset === 0 ? 'transform 0.3s, opacity 0.3s' : 'none'
+            }}
+            onTouchStart={burnStatus === 'pending' ? onTouchStart : undefined}
+            onTouchMove={burnStatus === 'pending' ? onTouchMove : undefined}
+            onTouchEnd={burnStatus === 'pending' ? onTouchEnd : undefined}
+        >
           
           {/* Header Bar */}
           <div className="h-14 bg-slate-50 dark:bg-slate-950 flex items-center justify-between px-6 border-b border-slate-200 dark:border-white/5">
@@ -577,6 +621,15 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                     VISOR SEGURO
                 </div>
           </div>
+
+          {/* Swipe Hint (Mobile Only - Visual Aid) */}
+          {burnStatus === 'pending' && (
+              <div className="absolute inset-x-0 -top-8 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity md:hidden">
+                  <div className="bg-red-500/80 text-white text-[10px] px-2 py-1 rounded-full flex items-center gap-1">
+                      <ArrowUp size={10} /> DESLIZA PARA DESTRUIR
+                  </div>
+              </div>
+          )}
 
           {/* Timer Badge */}
           <div className="absolute top-16 right-4 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md text-slate-800 dark:text-white px-3 py-1.5 rounded-lg text-xs font-mono border border-slate-200 dark:border-slate-700 shadow-xl z-20 flex items-center gap-2">
@@ -717,6 +770,9 @@ const RetrieveView: React.FC<RetrieveViewProps> = ({ initialCode }) => {
                     <p className="text-slate-500 dark:text-slate-400 text-xs font-mono border border-slate-300 dark:border-slate-700 px-3 py-1 rounded-full bg-white/50 dark:bg-slate-950/50">
                         {foundFile.type.toUpperCase()} • ENCRIPTADO
                     </p>
+                    <div className="mt-4 md:hidden text-slate-400 dark:text-slate-500 animate-bounce">
+                        <ArrowUp size={24} />
+                    </div>
                 </div>
             )}
           </div>

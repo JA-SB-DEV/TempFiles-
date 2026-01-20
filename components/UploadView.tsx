@@ -540,9 +540,10 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
         <div className="bg-slate-50/50 dark:bg-slate-950/50 rounded-[1.8rem] p-6">
             <div className="flex flex-col gap-6">
                 
-                {/* Segmented Control */}
-                <div className="bg-slate-200 dark:bg-slate-900 p-1.5 rounded-2xl flex relative border border-slate-300 dark:border-white/5">
+                {/* Segmented Control - Scrollable on Mobile to prevent cutoff */}
+                <div className="bg-slate-200 dark:bg-slate-900 p-1.5 rounded-2xl flex relative border border-slate-300 dark:border-white/5 overflow-x-auto no-scrollbar">
                     {/* Sliding Background */}
+                    {/* Note: Width and Position calculations assume 4 items. On narrow screens where scrolling happens, this visual cue still works relative to the container width if min-widths are enforced */}
                     <div 
                         className={`absolute top-1.5 bottom-1.5 rounded-xl bg-white dark:bg-slate-800 shadow-md transition-all duration-300 ease-out border border-slate-200 dark:border-white/5`}
                         style={{
@@ -552,34 +553,37 @@ const UploadView: React.FC<UploadViewProps> = ({ onUploadSuccess }) => {
                         }}
                     ></div>
                     
-                    <button 
-                        onClick={() => { setMode('file'); removeFile(); }}
-                        className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'file' ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                    >
-                        <ImageIcon size={20} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:block">Media</span>
-                    </button>
-                    <button 
-                        onClick={() => { setMode('audio'); removeFile(); }}
-                        className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'audio' ? 'text-pink-600 dark:text-pink-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                    >
-                        <Mic size={20} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:block">Voz</span>
-                    </button>
-                    <button 
-                        onClick={() => { setMode('text'); removeFile(); }}
-                        className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'text' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                    >
-                        <FileText size={20} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:block">Nota</span>
-                    </button>
-                     <button 
-                        onClick={() => { setMode('document'); removeFile(); }}
-                        className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'document' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                    >
-                        <Paperclip size={20} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:block">Docs</span>
-                    </button>
+                    {/* Container to enforce minimum width for buttons */}
+                    <div className="flex w-full min-w-[340px]">
+                        <button 
+                            onClick={() => { setMode('file'); removeFile(); }}
+                            className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'file' ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                        >
+                            <ImageIcon size={20} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider block">Media</span>
+                        </button>
+                        <button 
+                            onClick={() => { setMode('audio'); removeFile(); }}
+                            className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'audio' ? 'text-pink-600 dark:text-pink-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                        >
+                            <Mic size={20} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider block">Voz</span>
+                        </button>
+                        <button 
+                            onClick={() => { setMode('text'); removeFile(); }}
+                            className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'text' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                        >
+                            <FileText size={20} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider block">Nota</span>
+                        </button>
+                        <button 
+                            onClick={() => { setMode('document'); removeFile(); }}
+                            className={`flex-1 relative z-10 py-3 rounded-xl flex flex-col items-center gap-1 transition-colors ${mode === 'document' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                        >
+                            <Paperclip size={20} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider block">Docs</span>
+                        </button>
+                    </div>
                 </div>
                 
                 {/* Content Area */}
