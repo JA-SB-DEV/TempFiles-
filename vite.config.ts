@@ -14,5 +14,12 @@ export default defineConfig(({ mode }) => {
       'process.env.SUPABASE_URL': JSON.stringify(env.SUPABASE_URL),
       'process.env.SUPABASE_ANON_KEY': JSON.stringify(env.SUPABASE_ANON_KEY),
     },
+    build: {
+      rollupOptions: {
+        // Externalize jszip so Rollup doesn't fail if it's missing in node_modules,
+        // relying on index.html importmap to provide it at runtime.
+        external: ['jszip'], 
+      }
+    }
   };
 });

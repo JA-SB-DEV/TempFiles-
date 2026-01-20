@@ -42,7 +42,7 @@ const GlobalStats: React.FC<GlobalStatsProps> = ({ onClose }) => {
   const getPercent = (type: string) => {
       if (!stats || !stats.sampleTypes) return 0;
       const count = stats.sampleTypes[type] || 0;
-      const totalSample = Object.values(stats.sampleTypes).reduce((a: number, b: number) => a + b, 0);
+      const totalSample = (Object.values(stats.sampleTypes) as number[]).reduce((a, b) => a + b, 0);
       if (totalSample === 0) return 0;
       return Math.round((count / totalSample) * 100);
   };

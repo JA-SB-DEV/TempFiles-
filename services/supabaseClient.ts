@@ -48,8 +48,10 @@ export const getPublicStats = async () => {
         .order('created_at', { ascending: false })
         .limit(100);
 
-    const types = (recentFiles || []).reduce((acc, curr) => {
-        acc[curr.type] = (acc[curr.type] || 0) + 1;
+    // Fix: Explicitly type the accumulator and current value to avoid implicit 'any' errors
+    const types = (recentFiles || []).reduce((acc: Record<string, number>, curr: any) => {
+        const type = curr.type as string;
+        acc[type] = (acc[type] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
 
